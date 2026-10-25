@@ -194,10 +194,10 @@ function guessCarrier(k) {
 const H = 3600e3, D = 24 * H;
 function seed() {
   const now = Date.now();
-  const mk = (kolli, owner, tCarrier, tName, plats, ageH, status, extra = {}) => {
+  const mk = (kolli, owner, tCarrier, tName, ageH, status, extra = {}) => {
     const created = now - ageH * H;
-    const p = { id: "p" + Math.random().toString(36).slice(2, 9), kolli, owner, at: { carrier: tCarrier, name: tName }, plats, note: extra.note || "", createdAt: created, status, pickupAt: null, pickedAt: null, seenAt: null, events: [] };
-    p.events.push({ t: created, text: `Registrerat på ${tCarrier} ${tName}, plats ${plats}`, by: extra.by || "terminal@" + CARRIERS[tCarrier].domains[0] });
+    const p = { id: "p" + Math.random().toString(36).slice(2, 9), kolli, owner, at: { carrier: tCarrier, name: tName }, createdAt: created, status, pickupAt: null, pickedAt: null, seenAt: null, events: [] };
+    p.events.push({ t: created, text: `Registrerat på ${tCarrier} ${tName}`, by: extra.by || "terminal@" + CARRIERS[tCarrier].domains[0] });
     p.events.push({ t: created + 60e3, text: `${owner} aviserad`, by: "PaketNavet" });
     if (["sedd", "planerad", "hamtad"].includes(status)) { p.seenAt = created + 2 * H; p.events.push({ t: p.seenAt, text: `Sett av ${owner}`, by: "hamtning@" + CARRIERS[owner].domains[0] }); }
     if (["planerad", "hamtad"].includes(status)) { p.pickupAt = extra.pickupAt ?? (created + 30 * H); p.events.push({ t: created + 3 * H, text: `Upphämtning planerad ${fmtDT(p.pickupAt)}`, by: "hamtning@" + CARRIERS[owner].domains[0] }); }
@@ -205,21 +205,21 @@ function seed() {
     return p;
   };
   return [
-    mk("JJD0001234567890", "DHL", "FedEx", "Arlanda Cargo City", "Hylla B-14", 5, "aviserad", { note: "Inkom med FedEx-linje från Köpenhamn" }),
-    mk("JJD0001234569911", "DHL", "FedEx", "Arlanda Cargo City", "Hylla B-14", 4.5, "aviserad"),
-    mk("1Z999AA10123456784", "UPS", "FedEx", "Arlanda Cargo City", "Bur 3", 52, "sedd", { note: "Skadad hörna, fotad" }),
-    mk("RR123456785SE", "PostNord", "FedEx", "Arlanda Cargo City", "Pall P-07", 26, "planerad", { pickupAt: now + 4 * H }),
-    mk("794644790132", "FedEx", "DHL", "Jönköping Torsvik", "Avvikelsehylla 2", 30, "aviserad"),
-    mk("JJD0001239876543", "DHL", "PostNord", "Rosersberg", "Gång 12, fack 4", 76, "sedd"),
-    mk("JJD0001231112223", "DHL", "UPS", "Malmö Fosie", "Bur 1", 20, "planerad", { pickupAt: now + 20 * H }),
-    mk("SCH5566778899", "Schenker", "FedEx", "Arlanda Cargo City", "Hylla A-02", 98, "hamtad", { pickupAt: now - 40 * H, pickedAt: now - 39.5 * H }),
-    mk("1Z999AA10198765430", "UPS", "DHL", "Jönköping Torsvik", "Avvikelsehylla 1", 120, "hamtad", { pickupAt: now - 70 * H, pickedAt: now - 69 * H }),
-    mk("JJD0001237778889", "DHL", "FedEx", "Arlanda Cargo City", "Hylla B-15", 170, "hamtad", { pickupAt: now - 100 * H, pickedAt: now - 98 * H }),
+    mk("JJD0001234567890", "DHL", "FedEx", "Arlanda Cargo City", 5, "aviserad"),
+    mk("JJD0001234569911", "DHL", "FedEx", "Arlanda Cargo City", 4.5, "aviserad"),
+    mk("1Z999AA10123456784", "UPS", "FedEx", "Arlanda Cargo City", 52, "sedd"),
+    mk("RR123456785SE", "PostNord", "FedEx", "Arlanda Cargo City", 26, "planerad", { pickupAt: now + 4 * H }),
+    mk("794644790132", "FedEx", "DHL", "Jönköping Torsvik", 30, "aviserad"),
+    mk("JJD0001239876543", "DHL", "PostNord", "Rosersberg", 76, "sedd"),
+    mk("JJD0001231112223", "DHL", "UPS", "Malmö Fosie", 20, "planerad", { pickupAt: now + 20 * H }),
+    mk("SCH5566778899", "Schenker", "FedEx", "Arlanda Cargo City", 98, "hamtad", { pickupAt: now - 40 * H, pickedAt: now - 39.5 * H }),
+    mk("1Z999AA10198765430", "UPS", "DHL", "Jönköping Torsvik", 120, "hamtad", { pickupAt: now - 70 * H, pickedAt: now - 69 * H }),
+    mk("JJD0001237778889", "DHL", "FedEx", "Arlanda Cargo City", 170, "hamtad", { pickupAt: now - 100 * H, pickedAt: now - 98 * H }),
   ];
 }
 
 // ---------- Lagring ----------
-const KEY = "paketnavet.v1";
+const KEY = "paketnavet.v2";
 let state = { pkgs: [], user: null, tab: null };
 function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (Array.isArray(s.pkgs)) { state = s; return; } } } catch (e) {}
@@ -350,8 +350,7 @@ function pkgCard(p, mode) {
   return `<article class="pkg" data-s="${p.status}" id="card-${p.id}">
     <div class="stack" style="gap:4px">
       <div class="kolli">${esc(p.kolli)}</div>
-      <div class="meta">${where}<span>Plats: ${esc(p.plats)}</span><span class="age${old ? " old" : ""}">Liggtid ${dur(lying(p))}</span></div>
-      ${p.note ? `<div class="meta">${esc(p.note)}</div>` : ""}
+      <div class="meta">${where}<span class="age${old ? " old" : ""}">Liggtid ${dur(lying(p))}</span></div>
     </div>
     <div>${pill(p.status)}</div>
     ${acts ? `<div class="acts">${acts}</div>` : ""}
@@ -372,12 +371,6 @@ function viewTerminal(v) {
       </label>
       <label class="f" for="r-owner">Rätt transportör
         <select id="r-owner"><option value="">Välj</option>${others.map(c => `<option>${c}</option>`).join("")}</select>
-      </label>
-      <label class="f" for="r-plats">Plats på terminalen
-        <input id="r-plats" placeholder="t.ex. Hylla B-14" required>
-      </label>
-      <label class="f" for="r-note">Anteckning <span class="hint">(valfritt)</span>
-        <textarea id="r-note" rows="2" placeholder="Skick, hur det kom in, antal kolli"></textarea>
       </label>
       <span class="hint err" id="r-err" hidden></span>
       <button class="btn" type="submit">Registrera och avisera</button>
@@ -400,18 +393,17 @@ function viewTerminal(v) {
     const fail = m => { err.textContent = m; err.hidden = false; };
     if (kolli.length < 8) return fail("Kollinumret behöver minst 8 tecken.");
     if (!o.value) return fail("Välj vilken transportör paketet tillhör.");
-    if (!$("#r-plats").value.trim()) return fail("Ange var paketet ligger, så att det hittas vid upphämtning.");
     const dup = state.pkgs.find(p => p.kolli === kolli && p.status !== "hamtad");
     if (dup) return fail(dup.at.carrier === u.carrier ? `${kolli} är redan registrerat på ${dup.at.name}.` : `${kolli} är redan registrerat som felsorterat. Kontrollera kollinumret.`);
     const now = Date.now();
-    const p = { id: "p" + now.toString(36), kolli, owner: o.value, at: { carrier: u.carrier, name: u.terminal }, plats: $("#r-plats").value.trim(), note: $("#r-note").value.trim(), createdAt: now, status: "aviserad", pickupAt: null, pickedAt: null, seenAt: null, events: [] };
-    event(p, `Registrerat på ${u.carrier} ${u.terminal}, plats ${p.plats}`);
+    const p = { id: "p" + now.toString(36), kolli, owner: o.value, at: { carrier: u.carrier, name: u.terminal }, createdAt: now, status: "aviserad", pickupAt: null, pickedAt: null, seenAt: null, events: [] };
+    event(p, `Registrerat på ${u.carrier} ${u.terminal}`);
     p.events.push({ t: now, text: `${p.owner} aviserad`, by: "PaketNavet" });
     state.pkgs.unshift(p); save(); render(); toast(`${kolli} registrerat. ${p.owner} har aviserats.`);
   };
   v.querySelectorAll('[data-act="pick"]').forEach(b => b.onclick = () => {
     const p = state.pkgs.find(x => x.id === b.dataset.id);
-    p.status = "hamtad"; p.pickedAt = Date.now(); event(p, `Hämtad av ${p.owner}, överlämnad från ${p.plats}`);
+    p.status = "hamtad"; p.pickedAt = Date.now(); event(p, `Hämtad av ${p.owner} från ${p.at.carrier} ${p.at.name}`);
     save(); render(); toast(`${p.kolli} markerat som hämtat.`);
   });
 }

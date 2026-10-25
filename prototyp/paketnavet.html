@@ -241,6 +241,9 @@ function dur(ms) {
 const lying = p => (p.pickedAt || Date.now()) - p.createdAt;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2600); }
 function event(p, text) { p.events.push({ t: Date.now(), text, by: state.user.email }); }
+// Behörighet: en transportör ser bara paket den äger, plus främmande paket som ligger på dess egna terminaler.
+const ownedBy = (p, u) => p.owner === u.carrier;
+const canSee = (p, u) => p.owner === u.carrier || p.at.carrier === u.carrier;
 function pill(s) { return `<span class="pill ${s}">${STATUS[s]}</span>`; }
 
 function checkEmail(email) {
@@ -399,7 +402,7 @@ function viewTerminal(v) {
     if (!o.value) return fail("Välj vilken transportör paketet tillhör.");
     if (!$("#r-plats").value.trim()) return fail("Ange var paketet ligger, så att det hittas vid upphämtning.");
     const dup = state.pkgs.find(p => p.kolli === kolli && p.status !== "hamtad");
-    if (dup) return fail(`${kolli} är redan registrerat hos ${dup.at.carrier} ${dup.at.name}.`);
+    if (dup) return fail(dup.at.carrier === u.carrier ? `${kolli} är redan registrerat på ${dup.at.name}.` : `${kolli} är redan registrerat som felsorterat. Kontrollera kollinumret.`);
     const now = Date.now();
     const p = { id: "p" + now.toString(36), kolli, owner: o.value, at: { carrier: u.carrier, name: u.terminal }, plats: $("#r-plats").value.trim(), note: $("#r-note").value.trim(), createdAt: now, status: "aviserad", pickupAt: null, pickedAt: null, seenAt: null, events: [] };
     event(p, `Registrerat på ${u.carrier} ${u.terminal}, plats ${p.plats}`);
@@ -468,10 +471,10 @@ function customerText(p) {
 }
 function viewKund(v) {
   const u = state.user;
-  const sample = state.pkgs.filter(p => p.owner === u.carrier).slice(0, 4);
+  const sample = state.pkgs.filter(p => ownedBy(p, u)).slice(0, 4);
   v.innerHTML = `<div class="grid2">
     <form class="panel" id="sf">
-      <div class="stack" style="gap:4px"><h2>Sök paket</h2><p class="muted" style="font-size:.9rem">Se var ett felsorterat paket ligger och vad som hänt.</p></div>
+      <div class="stack" style="gap:4px"><h2>Sök paket</h2><p class="muted" style="font-size:.9rem">Se var ett av ${esc(u.carrier)}s felsorterade paket ligger och vad som hänt.</p></div>
       <label class="f" for="s-q">Kollinummer<input id="s-q" class="mono" autocomplete="off" placeholder="Hela eller delar av numret" value="${esc(state.lastQ || "")}"></label>
       <button class="btn" type="submit">Sök</button>
       ${sample.length ? `<div class="stack" style="gap:6px"><span class="label">Exempel att söka på</span><div class="row" style="gap:6px">${sample.map(p => `<button type="button" class="btn small sec mono" data-q="${esc(p.kolli)}">${esc(p.kolli)}</button>`).join("")}</div></div>` : ""}
@@ -482,12 +485,12 @@ function viewKund(v) {
     q = q.trim().toUpperCase().replace(/\s+/g, ""); state.lastQ = q; save();
     const res = $("#s-res");
     if (!q) { res.innerHTML = `<div class="empty">Skriv ett kollinummer för att se paketets historik.</div>`; return; }
-    const hits = state.pkgs.filter(p => p.kolli.includes(q));
-    if (!hits.length) { res.innerHTML = `<div class="empty">Inget paket med <span class="mono">${esc(q)}</span> finns i PaketNavet. Det har alltså inte registrerats som felsorterat hos någon ansluten terminal.</div>`; return; }
+    const hits = state.pkgs.filter(p => ownedBy(p, u) && p.kolli.includes(q));
+    if (!hits.length) { res.innerHTML = `<div class="empty">Inget ${esc(u.carrier)}-paket med <span class="mono">${esc(q)}</span> finns i PaketNavet. Det har alltså inte registrerats som felsorterat hos någon ansluten terminal.</div>`; return; }
     res.innerHTML = hits.map(p => `<article class="panel">
       <div class="row" style="justify-content:space-between"><span class="kolli mono" style="font-weight:600;font-size:1.05rem;overflow-wrap:anywhere">${esc(p.kolli)}</span>${pill(p.status)}</div>
       <div class="row muted" style="gap:4px 16px;font-size:.88rem"><span>Tillhör <b class="carrier">${esc(p.owner)}</b></span><span>Ligger/låg hos ${esc(p.at.carrier)} ${esc(p.at.name)}</span><span>Liggtid ${dur(lying(p))}</span></div>
-      ${p.owner === u.carrier ? `<div class="answer"><div class="row"><span class="label">Förslag på svar till kund</span><button class="btn small sec" type="button" data-copy="${p.id}">Kopiera</button></div><p id="ans-${p.id}">${esc(customerText(p))}</p></div>` : `<p class="muted" style="font-size:.88rem">Paketet tillhör ${esc(p.owner)}. Hänvisa kunden dit.</p>`}
+      <div class="answer"><div class="row"><span class="label">Förslag på svar till kund</span><button class="btn small sec" type="button" data-copy="${p.id}">Kopiera</button></div><p id="ans-${p.id}">${esc(customerText(p))}</p></div>
       <div class="stack" style="gap:8px"><span class="label">Händelser</span>
       <ol class="tl">${p.events.slice().sort((a, b) => a.t - b.t).map(e => `<li><time>${fmtDT(e.t)}</time>${esc(e.text)} <span class="muted" style="font-size:.8rem">· ${esc(e.by)}</span></li>`).join("")}</ol></div>
     </article>`).join("");
@@ -503,7 +506,8 @@ function viewKund(v) {
 }
 
 function viewPilot(v) {
-  const ps = state.pkgs;
+  const u = state.user;
+  const ps = state.pkgs.filter(p => canSee(p, u));
   const done = ps.filter(p => p.status === "hamtad");
   const open = ps.filter(p => p.status !== "hamtad");
   const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
@@ -518,7 +522,7 @@ function viewPilot(v) {
   const rows = Object.entries(byTerm).sort((a, b) => b[1].n - a[1].n);
   const maxN = Math.max(...rows.map(r => r[1].n), 1);
   v.innerHTML = `<div class="stack" style="gap:24px">
-    <div class="stack" style="gap:4px"><h2>Pilotmått</h2><p class="muted">Underlag för att utvärdera piloten efter 1–3 månader. Jämför mot terminalens nuläge före start.</p></div>
+    <div class="stack" style="gap:4px"><h2>Pilotmått</h2><p class="muted">Underlag för att utvärdera piloten efter 1–3 månader. Visar bara paket som rör ${esc(u.carrier)}: era paket hos andra och andras paket på era terminaler.</p></div>
     <div class="kpis">
       <div class="kpi"><span class="label">Snittliggtid, hämtade</span><span class="v">${dur(avgLie)}</span><span class="muted" style="font-size:.85rem">${done.length} hämtade paket</span></div>
       <div class="kpi"><span class="label">Tid till avisering sedd</span><span class="v">${dur(avgReact)}</span><span class="muted" style="font-size:.85rem">Från registrering</span></div>

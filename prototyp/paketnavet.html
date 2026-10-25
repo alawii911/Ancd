@@ -1,0 +1,556 @@
+<title>PaketNavet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: terminalens arbetsyta – en smal statusrad överst, flikar per roll, innehåll i en kolumn som delar sig på bred skärm. */
+:root {
+  --bg: #eef1f3;
+  --surface: #ffffff;
+  --ink: #17212b;
+  --muted: #5b6875;
+  --line: #d3dae0;
+  --accent: #e8a317;      /* sorteringsetikett-gul */
+  --accent-ink: #1b1400;
+  --steel: #2c4a63;
+  --ok: #1f7a4d;
+  --warn: #a35c00;
+  --bad: #b3261e;
+  --chip: #e2e8ed;
+  --bar: #22394d;
+  --bar-ink: #f4f7f9;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171c; --surface: #1a2229; --ink: #e6ebef; --muted: #96a3ae; --line: #2d3943;
+    --accent: #f0b43a; --accent-ink: #1b1400; --steel: #8fb5d4; --ok: #5cc48f; --warn: #e6a24a; --bad: #f08079; --chip: #25313a; --bar: #0b1014; --bar-ink: #e6ebef;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171c; --surface: #1a2229; --ink: #e6ebef; --muted: #96a3ae; --line: #2d3943;
+  --accent: #f0b43a; --accent-ink: #1b1400; --steel: #8fb5d4; --ok: #5cc48f; --warn: #e6a24a; --bad: #f08079; --chip: #25313a; --bar: #0b1014; --bar-ink: #e6ebef;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h2 { font-size: 1.35rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+
+/* top bar */
+.topbar { background: var(--bar); color: var(--bar-ink); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.topbar .wrap { display: flex; align-items: center; gap: 16px; padding-block: 10px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--f-display); font-weight: 800; font-size: 1.2rem; letter-spacing: -.01em; }
+.brand .mark { width: 26px; height: 26px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: .8rem; border-radius: 3px; }
+.who { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: .85rem; flex-wrap: wrap; }
+.who b { font-weight: 600; }
+.linkbtn { background: none; border: 1px solid currentColor; color: inherit; padding: 4px 10px; border-radius: 3px; cursor: pointer; font: inherit; font-size: .8rem; opacity: .9; }
+.linkbtn:hover { opacity: 1; }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 20px; overflow-x: auto; }
+.tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; display: flex; gap: 8px; align-items: center; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.badge { background: var(--bad); color: #fff; font-size: .7rem; border-radius: 10px; padding: 1px 7px; font-weight: 700; }
+
+main { padding-block: 24px 64px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.stack { display: grid; gap: 12px; min-width: 0; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+
+/* forms */
+label.f { display: grid; gap: 4px; font-size: .85rem; font-weight: 600; }
+input, select, textarea { font: inherit; font-weight: 400; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 9px 10px; width: 100%; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { font-size: .8rem; color: var(--muted); font-weight: 400; }
+.hint.err { color: var(--bad); }
+.hint.ok { color: var(--ok); }
+.btn { font: inherit; font-weight: 600; border: 0; border-radius: 4px; padding: 10px 16px; cursor: pointer; background: var(--accent); color: var(--accent-ink); }
+.btn:hover { filter: brightness(1.05); }
+.btn.sec { background: var(--chip); color: var(--ink); }
+.btn.small { padding: 6px 12px; font-size: .85rem; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* package list */
+.pkgs { display: grid; gap: 10px; }
+.pkg { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 4px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; }
+.pkg[data-s="aviserad"] { border-left-color: var(--bad); }
+.pkg[data-s="sedd"] { border-left-color: var(--warn); }
+.pkg[data-s="planerad"] { border-left-color: var(--accent); }
+.pkg[data-s="hamtad"] { border-left-color: var(--ok); opacity: .8; }
+.pkg .kolli { font-family: var(--f-mono); font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+.pkg .meta { font-size: .85rem; color: var(--muted); display: flex; gap: 4px 14px; flex-wrap: wrap; }
+.pkg .acts { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: .75rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.aviserad { color: var(--bad); }
+.pill.sedd { color: var(--warn); }
+.pill.planerad { color: var(--steel); }
+.pill.hamtad { color: var(--ok); }
+.carrier { font-weight: 700; color: var(--ink); }
+.age { font-variant-numeric: tabular-nums; }
+.age.old { color: var(--bad); font-weight: 600; }
+
+.empty { border: 1px dashed var(--line); border-radius: 6px; padding: 28px; text-align: center; color: var(--muted); }
+.plan { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; grid-column: 1 / -1; background: var(--bg); padding: 12px; border-radius: 4px; }
+.plan .row { grid-column: 1 / -1; }
+
+/* login */
+.login { max-width: 460px; margin: 48px auto; }
+.demo { display: grid; gap: 8px; }
+.demo button { text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; display: grid; gap: 2px; }
+.demo button:hover { border-color: var(--accent); }
+.demo small { color: var(--muted); font-family: var(--f-mono); font-size: .78rem; }
+
+/* timeline */
+.tl { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.tl li { position: relative; padding: 0 0 18px 24px; border-left: 2px solid var(--line); margin-left: 6px; }
+.tl li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.tl li::before { content: ""; position: absolute; left: -7px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--steel); }
+.tl li:last-child::before { background: var(--accent); border-color: var(--accent); }
+.tl time { font-family: var(--f-mono); font-size: .78rem; color: var(--muted); display: block; }
+.answer { background: var(--bg); border-radius: 4px; padding: 14px; font-size: .95rem; display: grid; gap: 8px; }
+.answer .row { justify-content: space-between; }
+
+/* metrics */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 4px; }
+.kpi .v { font-family: var(--f-display); font-weight: 800; font-size: 2rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.kpi .v small { font-size: 1rem; font-weight: 600; color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { height: 8px; background: var(--chip); border-radius: 4px; overflow: hidden; min-width: 80px; }
+.bar i { display: block; height: 100%; background: var(--steel); }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 4px; font-weight: 600; font-size: .9rem; z-index: 20; max-width: calc(100% - 32px); }
+.foot { font-size: .8rem; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 40px; }
+@media (prefers-reduced-motion: no-preference) { .pkg, .panel { transition: border-color .2s; } }
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="mark">PN</span>PaketNavet</div>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="app"></div>
+  <div class="foot">
+    <span>Prototyp för pilot. Data sparas bara i din webbläsare.</span>
+    <button class="linkbtn" id="reset" type="button" style="color: var(--muted)">Återställ demodata</button>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+
+// ---------- Referensdata ----------
+const CARRIERS = {
+  DHL:      { domains: ["dhl.com", "dhl.se"], terminals: ["Jönköping Torsvik", "Göteborg Hisings Backa"] },
+  FedEx:    { domains: ["fedex.com"], terminals: ["Arlanda Cargo City", "Malmö Bulltofta"] },
+  PostNord: { domains: ["postnord.com", "postnord.se"], terminals: ["Rosersberg", "Hallsberg"] },
+  UPS:      { domains: ["ups.com"], terminals: ["Malmö Fosie", "Stockholm Kungens Kurva"] },
+  Schenker: { domains: ["dbschenker.com"], terminals: ["Göteborg Torslanda", "Norrköping Ståthöga"] },
+};
+const PRIVATE_DOMAINS = ["gmail.com", "hotmail.com", "hotmail.se", "outlook.com", "outlook.se", "live.se", "live.com", "yahoo.com", "yahoo.se", "icloud.com", "me.com", "protonmail.com", "proton.me"];
+const ROLES = { terminal: "Terminalpersonal", hamtning: "Upphämtning", kundtjanst: "Kundtjänst" };
+const STATUS = {
+  aviserad: "Aviserad",
+  sedd:     "Sedd av transportör",
+  planerad: "Upphämtning planerad",
+  hamtad:   "Hämtad",
+};
+
+// Gissa transportör från kollinumrets format (kan alltid ändras manuellt).
+function guessCarrier(k) {
+  const s = k.replace(/\s+/g, "").toUpperCase();
+  if (/^1Z[0-9A-Z]{16}$/.test(s)) return "UPS";
+  if (/^JJD\d{10,}$/.test(s) || /^JVGL\d+/.test(s) || /^\d{10}$/.test(s)) return "DHL";
+  if (/^[A-Z]{2}\d{9}SE$/.test(s) || /^00\d{16}$/.test(s)) return "PostNord";
+  if (/^(\d{12}|\d{15})$/.test(s)) return "FedEx";
+  if (/^SCH\d+/.test(s)) return "Schenker";
+  return null;
+}
+
+const H = 3600e3, D = 24 * H;
+function seed() {
+  const now = Date.now();
+  const mk = (kolli, owner, tCarrier, tName, plats, ageH, status, extra = {}) => {
+    const created = now - ageH * H;
+    const p = { id: "p" + Math.random().toString(36).slice(2, 9), kolli, owner, at: { carrier: tCarrier, name: tName }, plats, note: extra.note || "", createdAt: created, status, pickupAt: null, pickedAt: null, seenAt: null, events: [] };
+    p.events.push({ t: created, text: `Registrerat på ${tCarrier} ${tName}, plats ${plats}`, by: extra.by || "terminal@" + CARRIERS[tCarrier].domains[0] });
+    p.events.push({ t: created + 60e3, text: `${owner} aviserad`, by: "PaketNavet" });
+    if (["sedd", "planerad", "hamtad"].includes(status)) { p.seenAt = created + 2 * H; p.events.push({ t: p.seenAt, text: `Sett av ${owner}`, by: "hamtning@" + CARRIERS[owner].domains[0] }); }
+    if (["planerad", "hamtad"].includes(status)) { p.pickupAt = extra.pickupAt ?? (created + 30 * H); p.events.push({ t: created + 3 * H, text: `Upphämtning planerad ${fmtDT(p.pickupAt)}`, by: "hamtning@" + CARRIERS[owner].domains[0] }); }
+    if (status === "hamtad") { p.pickedAt = extra.pickedAt ?? (p.pickupAt + 20 * 60e3); p.events.push({ t: p.pickedAt, text: `Hämtad av ${owner}`, by: "terminal@" + CARRIERS[tCarrier].domains[0] }); }
+    return p;
+  };
+  return [
+    mk("JJD0001234567890", "DHL", "FedEx", "Arlanda Cargo City", "Hylla B-14", 5, "aviserad", { note: "Inkom med FedEx-linje från Köpenhamn" }),
+    mk("JJD0001234569911", "DHL", "FedEx", "Arlanda Cargo City", "Hylla B-14", 4.5, "aviserad"),
+    mk("1Z999AA10123456784", "UPS", "FedEx", "Arlanda Cargo City", "Bur 3", 52, "sedd", { note: "Skadad hörna, fotad" }),
+    mk("RR123456785SE", "PostNord", "FedEx", "Arlanda Cargo City", "Pall P-07", 26, "planerad", { pickupAt: now + 4 * H }),
+    mk("794644790132", "FedEx", "DHL", "Jönköping Torsvik", "Avvikelsehylla 2", 30, "aviserad"),
+    mk("JJD0001239876543", "DHL", "PostNord", "Rosersberg", "Gång 12, fack 4", 76, "sedd"),
+    mk("JJD0001231112223", "DHL", "UPS", "Malmö Fosie", "Bur 1", 20, "planerad", { pickupAt: now + 20 * H }),
+    mk("SCH5566778899", "Schenker", "FedEx", "Arlanda Cargo City", "Hylla A-02", 98, "hamtad", { pickupAt: now - 40 * H, pickedAt: now - 39.5 * H }),
+    mk("1Z999AA10198765430", "UPS", "DHL", "Jönköping Torsvik", "Avvikelsehylla 1", 120, "hamtad", { pickupAt: now - 70 * H, pickedAt: now - 69 * H }),
+    mk("JJD0001237778889", "DHL", "FedEx", "Arlanda Cargo City", "Hylla B-15", 170, "hamtad", { pickupAt: now - 100 * H, pickedAt: now - 98 * H }),
+  ];
+}
+
+// ---------- Lagring ----------
+const KEY = "paketnavet.v1";
+let state = { pkgs: [], user: null, tab: null };
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (Array.isArray(s.pkgs)) { state = s; return; } } } catch (e) {}
+  state = { pkgs: seed(), user: null, tab: null };
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+// ---------- Hjälpare ----------
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+function fmtDT(t) { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function dur(ms) {
+  ms = Math.max(0, ms);
+  if (ms < H) return Math.round(ms / 60e3) + " min";
+  if (ms < 2 * D) return (ms / H).toFixed(ms < 10 * H ? 1 : 0).replace(".", ",") + " h";
+  return (ms / D).toFixed(1).replace(".", ",") + " dygn";
+}
+const lying = p => (p.pickedAt || Date.now()) - p.createdAt;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2600); }
+function event(p, text) { p.events.push({ t: Date.now(), text, by: state.user.email }); }
+function pill(s) { return `<span class="pill ${s}">${STATUS[s]}</span>`; }
+
+function checkEmail(email) {
+  const m = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/.exec(email.trim().toLowerCase());
+  if (!m) return { err: "Skriv en hel e-postadress, till exempel anna.berg@fedex.com." };
+  const dom = m[1];
+  if (PRIVATE_DOMAINS.includes(dom)) return { err: `${dom} är en privat e-posttjänst. Logga in med din jobbmejl från transportföretaget.` };
+  for (const [c, v] of Object.entries(CARRIERS)) if (v.domains.includes(dom)) return { carrier: c, dom };
+  return { err: `${dom} är inte anslutet till PaketNavet ännu. Be din arbetsgivare ansluta företaget.` };
+}
+
+// ---------- Vyer ----------
+function render() {
+  const u = state.user;
+  $("#who").innerHTML = u ? `<span><b>${esc(u.email)}</b> · ${esc(u.carrier)} · ${ROLES[u.role]}${u.role === "terminal" ? " · " + esc(u.terminal) : ""}</span><button class="linkbtn" id="logout" type="button">Logga ut</button>` : "";
+  if (u) $("#logout").onclick = () => { state.user = null; save(); render(); };
+  if (!u) return renderLogin();
+
+  const tabs = [
+    ["terminal", "Terminal", u.role === "terminal"],
+    ["mina", "Våra paket hos andra", true],
+    ["kund", "Kundtjänst", true],
+    ["pilot", "Pilotmått", true],
+  ];
+  if (!state.tab || !tabs.some(t => t[0] === state.tab && t[2])) state.tab = { terminal: "terminal", hamtning: "mina", kundtjanst: "kund" }[u.role];
+  const unseen = state.pkgs.filter(p => p.owner === u.carrier && p.status === "aviserad").length;
+  const app = $("#app");
+  app.innerHTML = `<nav class="tabs" role="tablist">${tabs.filter(t => t[2]).map(([k, l]) =>
+    `<button class="tab" role="tab" type="button" data-tab="${k}" aria-selected="${state.tab === k}">${l}${k === "mina" && unseen ? `<span class="badge" title="Nya aviseringar">${unseen}</span>` : ""}</button>`).join("")}</nav><main id="view"></main>`;
+  app.querySelectorAll(".tab").forEach(b => b.onclick = () => { state.tab = b.dataset.tab; save(); render(); });
+  ({ terminal: viewTerminal, mina: viewMine, kund: viewKund, pilot: viewPilot })[state.tab]($("#view"));
+}
+
+function renderLogin() {
+  const demos = [
+    ["anna.berg@fedex.com", "terminal", "Arlanda Cargo City", "Terminalpersonal på FedEx Arlanda – registrerar felsorterade paket"],
+    ["jonas.ek@dhl.com", "hamtning", null, "Upphämtning på DHL – ser DHL-paket hos andra och planerar hämtning"],
+    ["sara.lind@dhl.com", "kundtjanst", null, "Kundtjänst på DHL – söker på kollinummer"],
+    ["mia.holm@gmail.com", "terminal", null, "Privat mejl – visar att inloggningen nekas"],
+  ];
+  $("#app").innerHTML = `
+  <div class="login">
+    <div class="panel">
+      <div class="stack" style="gap:6px">
+        <h2>Logga in med jobbmejl</h2>
+        <p class="muted">PaketNavet är bara öppet för anslutna transportföretag. Privat e-post fungerar inte.</p>
+      </div>
+      <form id="lf" class="stack" novalidate>
+        <label class="f" for="l-email">Jobbmejl
+          <input id="l-email" type="email" autocomplete="email" placeholder="fornamn.efternamn@foretag.com" required>
+          <span class="hint" id="l-hint">Företaget avgörs av din e-postdomän.</span>
+        </label>
+        <label class="f" for="l-role">Roll
+          <select id="l-role">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select>
+        </label>
+        <label class="f" for="l-term" id="l-term-wrap">Terminal
+          <select id="l-term"><option value="">Ange jobbmejl först</option></select>
+        </label>
+        <button class="btn" type="submit">Logga in</button>
+      </form>
+      <div class="stack" style="gap:8px">
+        <span class="label">Snabbinloggning för demo</span>
+        <div class="demo">${demos.map((d, i) => `<button type="button" data-i="${i}"><span>${esc(d[3])}</span><small>${esc(d[0])}</small></button>`).join("")}</div>
+      </div>
+    </div>
+  </div>`;
+  const email = $("#l-email"), role = $("#l-role"), term = $("#l-term"), hint = $("#l-hint");
+  const sync = () => {
+    $("#l-term-wrap").hidden = role.value !== "terminal";
+    const r = checkEmail(email.value);
+    if (!email.value.trim()) { hint.className = "hint"; hint.textContent = "Företaget avgörs av din e-postdomän."; term.innerHTML = `<option value="">Ange jobbmejl först</option>`; return r; }
+    if (r.err) { hint.className = "hint err"; hint.textContent = r.err; term.innerHTML = `<option value="">–</option>`; return r; }
+    hint.className = "hint ok"; hint.textContent = `Godkänd domän: ${r.carrier}`;
+    const cur = term.value;
+    term.innerHTML = CARRIERS[r.carrier].terminals.map(t => `<option${t === cur ? " selected" : ""}>${esc(t)}</option>`).join("");
+    return r;
+  };
+  email.oninput = sync; role.onchange = sync; sync();
+  const login = () => {
+    const r = sync();
+    if (r.err) { email.focus(); return; }
+    state.user = { email: email.value.trim().toLowerCase(), carrier: r.carrier, role: role.value, terminal: role.value === "terminal" ? term.value : null };
+    state.tab = null; save(); render(); toast(`Inloggad som ${ROLES[role.value].toLowerCase()} på ${r.carrier}`);
+  };
+  $("#lf").onsubmit = e => { e.preventDefault(); login(); };
+  document.querySelectorAll(".demo button").forEach(b => b.onclick = () => {
+    const d = demos[+b.dataset.i];
+    email.value = d[0]; role.value = d[1]; sync(); if (d[2]) term.value = d[2];
+    login();
+  });
+}
+
+function pkgCard(p, mode) {
+  const old = lying(p) > 2 * D && p.status !== "hamtad";
+  const where = mode === "terminal" ? `<span>Tillhör <span class="carrier">${esc(p.owner)}</span></span>` : `<span>Hos <span class="carrier">${esc(p.at.carrier)}</span> ${esc(p.at.name)}</span>`;
+  let acts = "";
+  if (mode === "terminal") {
+    if (p.status === "planerad") acts = `<span class="muted" style="font-size:.85rem">Hämtas ${fmtDT(p.pickupAt)}</span><button class="btn small" data-act="pick" data-id="${p.id}" type="button">Bekräfta överlämning</button>`;
+    else if (p.status !== "hamtad") acts = `<span class="muted" style="font-size:.85rem">Väntar på att ${esc(p.owner)} planerar upphämtning</span>`;
+  } else if (mode === "mine") {
+    if (p.status === "aviserad" || p.status === "sedd") acts = `<button class="btn small" data-act="plan" data-id="${p.id}" type="button">Planera upphämtning</button>`;
+    else if (p.status === "planerad") acts = `<span class="muted" style="font-size:.85rem">Planerad ${fmtDT(p.pickupAt)}</span><button class="btn small sec" data-act="plan" data-id="${p.id}" type="button">Ändra tid</button>`;
+  }
+  return `<article class="pkg" data-s="${p.status}" id="card-${p.id}">
+    <div class="stack" style="gap:4px">
+      <div class="kolli">${esc(p.kolli)}</div>
+      <div class="meta">${where}<span>Plats: ${esc(p.plats)}</span><span class="age${old ? " old" : ""}">Liggtid ${dur(lying(p))}</span></div>
+      ${p.note ? `<div class="meta">${esc(p.note)}</div>` : ""}
+    </div>
+    <div>${pill(p.status)}</div>
+    ${acts ? `<div class="acts">${acts}</div>` : ""}
+  </article>`;
+}
+
+function viewTerminal(v) {
+  const u = state.user;
+  const here = state.pkgs.filter(p => p.at.carrier === u.carrier && p.at.name === u.terminal).sort((a, b) => (a.status === "hamtad") - (b.status === "hamtad") || b.createdAt - a.createdAt);
+  const open = here.filter(p => p.status !== "hamtad");
+  const others = Object.keys(CARRIERS).filter(c => c !== u.carrier);
+  v.innerHTML = `<div class="grid2">
+    <form class="panel" id="rf" novalidate>
+      <div class="stack" style="gap:4px"><h2>Registrera felsorterat paket</h2><p class="muted" style="font-size:.9rem">Rätt transportör aviseras direkt.</p></div>
+      <label class="f" for="r-kolli">Kollinummer
+        <input id="r-kolli" class="mono" autocomplete="off" placeholder="t.ex. JJD0001234567890" required>
+        <span class="hint" id="r-khint">Skanna eller skriv av etiketten.</span>
+      </label>
+      <label class="f" for="r-owner">Rätt transportör
+        <select id="r-owner"><option value="">Välj</option>${others.map(c => `<option>${c}</option>`).join("")}</select>
+      </label>
+      <label class="f" for="r-plats">Plats på terminalen
+        <input id="r-plats" placeholder="t.ex. Hylla B-14" required>
+      </label>
+      <label class="f" for="r-note">Anteckning <span class="hint">(valfritt)</span>
+        <textarea id="r-note" rows="2" placeholder="Skick, hur det kom in, antal kolli"></textarea>
+      </label>
+      <span class="hint err" id="r-err" hidden></span>
+      <button class="btn" type="submit">Registrera och avisera</button>
+    </form>
+    <section class="stack">
+      <div class="row" style="justify-content:space-between"><h2>På ${esc(u.terminal)}</h2><span class="muted">${open.length} väntar · ${here.length - open.length} hämtade</span></div>
+      <div class="pkgs">${here.length ? here.map(p => pkgCard(p, "terminal")).join("") : `<div class="empty">Inga främmande paket på terminalen. Registrera det första i formuläret.</div>`}</div>
+    </section>
+  </div>`;
+  const k = $("#r-kolli"), o = $("#r-owner"), kh = $("#r-khint");
+  k.oninput = () => {
+    const g = guessCarrier(k.value);
+    if (g && g !== u.carrier) { o.value = g; kh.className = "hint ok"; kh.textContent = `Formatet ser ut som ${g}. Kontrollera mot etiketten.`; }
+    else if (g === u.carrier) { kh.className = "hint"; kh.textContent = `Formatet liknar ${g}s eget. Är paketet verkligen felsorterat?`; }
+    else { kh.className = "hint"; kh.textContent = "Skanna eller skriv av etiketten."; }
+  };
+  $("#rf").onsubmit = e => {
+    e.preventDefault();
+    const err = $("#r-err"), kolli = k.value.trim().toUpperCase().replace(/\s+/g, "");
+    const fail = m => { err.textContent = m; err.hidden = false; };
+    if (kolli.length < 8) return fail("Kollinumret behöver minst 8 tecken.");
+    if (!o.value) return fail("Välj vilken transportör paketet tillhör.");
+    if (!$("#r-plats").value.trim()) return fail("Ange var paketet ligger, så att det hittas vid upphämtning.");
+    const dup = state.pkgs.find(p => p.kolli === kolli && p.status !== "hamtad");
+    if (dup) return fail(`${kolli} är redan registrerat hos ${dup.at.carrier} ${dup.at.name}.`);
+    const now = Date.now();
+    const p = { id: "p" + now.toString(36), kolli, owner: o.value, at: { carrier: u.carrier, name: u.terminal }, plats: $("#r-plats").value.trim(), note: $("#r-note").value.trim(), createdAt: now, status: "aviserad", pickupAt: null, pickedAt: null, seenAt: null, events: [] };
+    event(p, `Registrerat på ${u.carrier} ${u.terminal}, plats ${p.plats}`);
+    p.events.push({ t: now, text: `${p.owner} aviserad`, by: "PaketNavet" });
+    state.pkgs.unshift(p); save(); render(); toast(`${kolli} registrerat. ${p.owner} har aviserats.`);
+  };
+  v.querySelectorAll('[data-act="pick"]').forEach(b => b.onclick = () => {
+    const p = state.pkgs.find(x => x.id === b.dataset.id);
+    p.status = "hamtad"; p.pickedAt = Date.now(); event(p, `Hämtad av ${p.owner}, överlämnad från ${p.plats}`);
+    save(); render(); toast(`${p.kolli} markerat som hämtat.`);
+  });
+}
+
+function viewMine(v) {
+  const u = state.user;
+  const mine = state.pkgs.filter(p => p.owner === u.carrier);
+  // Att öppna vyn räknas som att aviseringen är sedd.
+  let changed = false;
+  if (u.role === "hamtning") mine.filter(p => p.status === "aviserad").forEach(p => { p.status = "sedd"; p.seenAt = Date.now(); event(p, `Sett av ${u.carrier}`); p._new = true; changed = true; });
+  const open = mine.filter(p => p.status !== "hamtad");
+  const groups = {};
+  open.forEach(p => { const g = `${p.at.carrier} ${p.at.name}`; (groups[g] = groups[g] || []).push(p); });
+  const done = mine.filter(p => p.status === "hamtad").sort((a, b) => b.pickedAt - a.pickedAt);
+  v.innerHTML = `<div class="stack" style="gap:24px">
+    <div class="stack" style="gap:4px">
+      <h2>${esc(u.carrier)}-paket hos andra transportörer</h2>
+      <p class="muted">${open.length} paket väntar på ${Object.keys(groups).length} terminaler. Planera en upphämtning per terminal för att samla körningen.${u.role !== "hamtning" ? " Du har läsbehörighet; upphämtning planeras av rollen Upphämtning." : ""}</p>
+    </div>
+    ${Object.keys(groups).length ? Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([g, ps]) => `
+      <section class="stack">
+        <div class="row" style="justify-content:space-between"><h3>${esc(g)}</h3><span class="row" style="gap:8px"><span class="muted">${ps.length} kolli</span>${u.role === "hamtning" && ps.some(p => p.status !== "planerad") && ps.length > 1 ? `<button class="btn small sec" type="button" data-planall="${esc(g)}">Planera alla</button>` : ""}</span></div>
+        <div class="pkgs">${ps.sort((a, b) => a.createdAt - b.createdAt).map(p => pkgCard(p, u.role === "hamtning" ? "mine" : "view")).join("")}</div>
+      </section>`).join("") : `<div class="empty">Inga ${esc(u.carrier)}-paket ligger hos andra just nu.</div>`}
+    ${done.length ? `<section class="stack"><h3>Senast hämtade</h3><div class="pkgs">${done.slice(0, 5).map(p => pkgCard(p, "view")).join("")}</div></section>` : ""}
+  </div>`;
+  if (changed) { save(); toast("Nya aviseringar markerade som sedda."); }
+  const openPlan = (ids, anchor) => {
+    v.querySelectorAll(".plan").forEach(x => x.remove());
+    const def = new Date(Date.now() + D); def.setHours(10, 0, 0, 0);
+    const box = document.createElement("div");
+    box.className = "plan";
+    box.innerHTML = `<label class="f" for="pl-date">Datum<input type="date" id="pl-date" value="${def.getFullYear()}-${pad(def.getMonth() + 1)}-${pad(def.getDate())}"></label>
+      <label class="f" for="pl-time">Tid<input type="time" id="pl-time" value="10:00"></label>
+      <div class="row"><button class="btn small" type="button" id="pl-ok">Spara upphämtning${ids.length > 1 ? ` för ${ids.length} kolli` : ""}</button><button class="btn small sec" type="button" id="pl-x">Avbryt</button></div>`;
+    anchor.appendChild(box);
+    $("#pl-x", box).onclick = () => box.remove();
+    $("#pl-ok", box).onclick = () => {
+      const t = new Date(`${$("#pl-date", box).value}T${$("#pl-time", box).value}`).getTime();
+      if (!t) return;
+      ids.forEach(id => { const p = state.pkgs.find(x => x.id === id); const re = p.status === "planerad"; p.status = "planerad"; p.pickupAt = t; event(p, `Upphämtning ${re ? "ändrad till" : "planerad"} ${fmtDT(t)}`); });
+      save(); render(); toast(`Upphämtning sparad ${fmtDT(t)}. Terminalen ser tiden.`);
+    };
+  };
+  v.querySelectorAll('[data-act="plan"]').forEach(b => b.onclick = () => openPlan([b.dataset.id], $("#card-" + b.dataset.id)));
+  v.querySelectorAll("[data-planall]").forEach(b => b.onclick = () => {
+    const ps = groups[b.dataset.planall].filter(p => p.status !== "planerad");
+    openPlan(ps.map(p => p.id), b.closest("section"));
+  });
+}
+
+function customerText(p) {
+  const s = p.status;
+  if (s === "hamtad") return `Paketet hamnade av misstag hos en annan transportör men är nu tillbaka hos oss sedan ${fmtDT(p.pickedAt)} och fortsätter mot dig.`;
+  if (s === "planerad") return `Paketet har hamnat hos en annan transportör. Vi vet var det ligger och hämtar det ${fmtDT(p.pickupAt)}. Därefter fortsätter leveransen.`;
+  return `Paketet har hamnat hos en annan transportör. Vi vet var det ligger och planerar upphämtning. Vi återkommer med en tid.`;
+}
+function viewKund(v) {
+  const u = state.user;
+  const sample = state.pkgs.filter(p => p.owner === u.carrier).slice(0, 4);
+  v.innerHTML = `<div class="grid2">
+    <form class="panel" id="sf">
+      <div class="stack" style="gap:4px"><h2>Sök paket</h2><p class="muted" style="font-size:.9rem">Se var ett felsorterat paket ligger och vad som hänt.</p></div>
+      <label class="f" for="s-q">Kollinummer<input id="s-q" class="mono" autocomplete="off" placeholder="Hela eller delar av numret" value="${esc(state.lastQ || "")}"></label>
+      <button class="btn" type="submit">Sök</button>
+      ${sample.length ? `<div class="stack" style="gap:6px"><span class="label">Exempel att söka på</span><div class="row" style="gap:6px">${sample.map(p => `<button type="button" class="btn small sec mono" data-q="${esc(p.kolli)}">${esc(p.kolli)}</button>`).join("")}</div></div>` : ""}
+    </form>
+    <section class="stack" id="s-res"></section>
+  </div>`;
+  const show = q => {
+    q = q.trim().toUpperCase().replace(/\s+/g, ""); state.lastQ = q; save();
+    const res = $("#s-res");
+    if (!q) { res.innerHTML = `<div class="empty">Skriv ett kollinummer för att se paketets historik.</div>`; return; }
+    const hits = state.pkgs.filter(p => p.kolli.includes(q));
+    if (!hits.length) { res.innerHTML = `<div class="empty">Inget paket med <span class="mono">${esc(q)}</span> finns i PaketNavet. Det har alltså inte registrerats som felsorterat hos någon ansluten terminal.</div>`; return; }
+    res.innerHTML = hits.map(p => `<article class="panel">
+      <div class="row" style="justify-content:space-between"><span class="kolli mono" style="font-weight:600;font-size:1.05rem;overflow-wrap:anywhere">${esc(p.kolli)}</span>${pill(p.status)}</div>
+      <div class="row muted" style="gap:4px 16px;font-size:.88rem"><span>Tillhör <b class="carrier">${esc(p.owner)}</b></span><span>Ligger/låg hos ${esc(p.at.carrier)} ${esc(p.at.name)}</span><span>Liggtid ${dur(lying(p))}</span></div>
+      ${p.owner === u.carrier ? `<div class="answer"><div class="row"><span class="label">Förslag på svar till kund</span><button class="btn small sec" type="button" data-copy="${p.id}">Kopiera</button></div><p id="ans-${p.id}">${esc(customerText(p))}</p></div>` : `<p class="muted" style="font-size:.88rem">Paketet tillhör ${esc(p.owner)}. Hänvisa kunden dit.</p>`}
+      <div class="stack" style="gap:8px"><span class="label">Händelser</span>
+      <ol class="tl">${p.events.slice().sort((a, b) => a.t - b.t).map(e => `<li><time>${fmtDT(e.t)}</time>${esc(e.text)} <span class="muted" style="font-size:.8rem">· ${esc(e.by)}</span></li>`).join("")}</ol></div>
+    </article>`).join("");
+    res.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
+      const el = $("#ans-" + b.dataset.copy);
+      const sel = () => { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Texten är markerad. Kopiera med Ctrl+C."); };
+      try { navigator.clipboard.writeText(el.textContent).then(() => toast("Svaret är kopierat."), sel); } catch (e) { sel(); }
+    });
+  };
+  $("#sf").onsubmit = e => { e.preventDefault(); show($("#s-q").value); };
+  v.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { $("#s-q").value = b.dataset.q; show(b.dataset.q); });
+  show(state.lastQ || (sample[0] ? sample[0].kolli : ""));
+}
+
+function viewPilot(v) {
+  const ps = state.pkgs;
+  const done = ps.filter(p => p.status === "hamtad");
+  const open = ps.filter(p => p.status !== "hamtad");
+  const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+  const avgLie = avg(done.map(lying));
+  const avgPlanToPick = avg(done.filter(p => p.pickupAt).map(p => p.pickedAt - p.createdAt - (p.seenAt ? p.seenAt - p.createdAt : 0)));
+  const avgReact = avg(ps.filter(p => p.seenAt).map(p => p.seenAt - p.createdAt));
+  const over2 = open.filter(p => lying(p) > 2 * D).length;
+  // Antagande för piloten: ca 2,5 samtal mellan transportörer per felsorterat paket utan systemet.
+  const callsAvoided = Math.round(ps.length * 2.5);
+  const byTerm = {};
+  ps.forEach(p => { const k = `${p.at.carrier} ${p.at.name}`; const r = byTerm[k] = byTerm[k] || { n: 0, open: 0, lie: [] }; r.n++; if (p.status !== "hamtad") r.open++; r.lie.push(lying(p)); });
+  const rows = Object.entries(byTerm).sort((a, b) => b[1].n - a[1].n);
+  const maxN = Math.max(...rows.map(r => r[1].n), 1);
+  v.innerHTML = `<div class="stack" style="gap:24px">
+    <div class="stack" style="gap:4px"><h2>Pilotmått</h2><p class="muted">Underlag för att utvärdera piloten efter 1–3 månader. Jämför mot terminalens nuläge före start.</p></div>
+    <div class="kpis">
+      <div class="kpi"><span class="label">Snittliggtid, hämtade</span><span class="v">${dur(avgLie)}</span><span class="muted" style="font-size:.85rem">${done.length} hämtade paket</span></div>
+      <div class="kpi"><span class="label">Tid till avisering sedd</span><span class="v">${dur(avgReact)}</span><span class="muted" style="font-size:.85rem">Från registrering</span></div>
+      <div class="kpi"><span class="label">Väntar på upphämtning</span><span class="v">${open.length}</span><span class="muted" style="font-size:.85rem; color:${over2 ? "var(--bad)" : "var(--muted)"}">${over2} har legat över 2 dygn</span></div>
+      <div class="kpi"><span class="label">Samtal som slapp ringas</span><span class="v">≈${callsAvoided}</span><span class="muted" style="font-size:.85rem">Antagande: 2,5 samtal per paket</span></div>
+    </div>
+    <section class="panel">
+      <h3>Per terminal</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Terminal</th><th>Registrerade</th><th></th><th>Väntar</th><th>Snittliggtid</th></tr></thead>
+        <tbody>${rows.map(([k, r]) => `<tr><td>${esc(k)}</td><td class="n">${r.n}</td><td><div class="bar"><i style="width:${(r.n / maxN * 100).toFixed(0)}%"></i></div></td><td class="n">${r.open}</td><td class="n">${dur(avg(r.lie))}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </section>
+    <section class="panel">
+      <h3>Mäts under piloten</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Mått</th><th>Källa</th><th>Mål</th></tr></thead>
+        <tbody>
+          <tr><td>Liggtid per paket</td><td>Registrering → hämtad</td><td>Under 2 dygn</td></tr>
+          <tr><td>Samtal mellan transportörer</td><td>Terminalens samtalslogg före/under</td><td>−50 %</td></tr>
+          <tr><td>Upphämtningstid</td><td>Avisering → hämtad</td><td>Under 24 h</td></tr>
+          <tr><td>Kundtjänstärenden om felsorterade paket</td><td>Kundtjänstens ärendesystem</td><td>−30 %</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted" style="font-size:.85rem">Målen är förslag att stämma av med pilotterminalen.</p>
+    </section>
+  </div>`;
+}
+
+// ---------- Start ----------
+load();
+$("#reset").onclick = () => { state = { pkgs: seed(), user: state.user, tab: state.tab }; save(); render(); toast("Demodata återställd."); };
+render();
+})();
+</script>

@@ -220,6 +220,7 @@ Public Sub ImporteraDRE()
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & vbLf & noSvc & " rader har ingen Base Service (värdet finns inte i Service-tabellen)."
     MsgBox msg, vbInformation
+    If MsgBox("Vill du köra Validate Scans och Send Scans nu?", vbYesNo + vbQuestion) = vbYes Then ValidateAndSend n
     Exit Sub
 
 Abort:
@@ -235,6 +236,34 @@ Fail:
     If Not src Is Nothing Then src.Close SaveChanges:=False
     Application.ScreenUpdating = True
     MsgBox msg, vbCritical
+End Sub
+
+' Kör PUP1:s egna Validate Scans och Send Scans (samma som knapparna). Inloggningen
+' (användarnamn, lösenord, Device ID) skriver du själv i PUP1:s ruta - den sparas inte här.
+Private Sub ValidateAndSend(n As Long)
+    Dim ws As Worksheet, fails As Long, q As String
+    Set ws = wb.Worksheets(PUP_SHEET)
+    wb.Activate
+    ws.Activate
+
+    On Error GoTo Oops
+    Application.Run "'" & wb.Name & "'!PUP_ValidateScans_Button_Click"
+
+    fails = Application.WorksheetFunction.CountIf(ws.Range("W3:W1000"), "FAIL")
+    If fails > 0 Then
+        q = fails & " rader har FAIL i valideringen. Skicka ändå?"
+    Else
+        q = "Valideringen är godkänd. Skicka " & n & " scans?"
+    End If
+    q = q & vbLf & vbLf & "Du får logga in i nästa ruta."
+    If MsgBox(q, vbYesNo + vbExclamation + IIf(fails > 0, vbDefaultButton2, 0)) = vbNo Then Exit Sub
+
+    ws.Activate
+    Application.Run "'" & wb.Name & "'!PUP_SendScans_Button_Click"
+    Exit Sub
+
+Oops:
+    MsgBox "Något gick fel i PUP1:s makro: " & Err.Description, vbCritical
 End Sub
 
 ' Tabellen på bladet vars första kolumn börjar med headerStart (versaler, mellanslag och radbrytningar ignoreras).

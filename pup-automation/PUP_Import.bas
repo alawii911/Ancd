@@ -2,7 +2,7 @@ Attribute VB_Name = "PUP_Import"
 Option Explicit
 
 ' Importerar en DRE-rapport i PUP1 och uppdaterar bladet PUP i ett steg:
-'   1. Valj DRE-filen (xlsx/xls/xlsm/csv)
+'   1. Senaste DREReport i Downloads (eller valj fil) - PUP1 hittas bland de oppna filerna
 '   2. Track Date / Track Time sätts automatiskt till nu
 '      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med, rader där kolumnen PUP PUX inte är tom hoppas över
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
@@ -12,7 +12,7 @@ Option Explicit
 Private Const DATA_SHEET As String = "Data"
 Private Const PUP_SHEET As String = "PUP"
 
-' PUP1-arbetsboken som uppdateras (den aktiva när makrot startas)
+' PUP1-arbetsboken som uppdateras (hittas bland de öppna arbetsböckerna)
 Private wb As Workbook
 
 Public Sub ImporteraDRE2()
@@ -21,28 +21,36 @@ Public Sub ImporteraDRE2()
                    "Dest Postal Cd", "Base Service", "Pkg Type")
 
     Dim wsData As Worksheet, loData As ListObject, loParam As ListObject
-    Set wb = ActiveWorkbook
-    On Error Resume Next
-    Set wsData = wb.Worksheets(DATA_SHEET)
-    On Error GoTo 0
-    If Not wsData Is Nothing Then
-        Set loData = FindTable(wsData, "Tracking Number")
-        Set loParam = FindTable(wsData, "LocID")
+    Set wb = FindPup1()
+    If wb Is Nothing Then
+        MsgBox "Hittar inte PUP1 bland de öppna arbetsböckerna." & vbLf & vbLf & _
+               "Öppna PUP1 och kör makrot igen.", vbExclamation
+        Exit Sub
     End If
+    Set wsData = wb.Worksheets(DATA_SHEET)
+    Set loData = FindTable(wsData, "Tracking Number")
+    Set loParam = FindTable(wsData, "LocID")
     If loData Is Nothing Or loParam Is Nothing Then
-        MsgBox "Den aktiva arbetsboken (" & wb.Name & ") är inte PUP1." & vbLf & vbLf & _
-               "Öppna PUP1, klicka på dess fönster och kör makrot igen.", vbExclamation
+        MsgBox "Hittar inte tabellerna med 'Tracking Number' och 'LocID' på bladet '" & DATA_SHEET & "'.", vbExclamation
         Exit Sub
     End If
 
     ' --- Vilken fil, vilket datum och vilken tid ------------------------------
-    Dim path As Variant
-    On Error Resume Next
-    ChDrive Environ$("USERPROFILE")
-    ChDir Environ$("USERPROFILE") & "\Downloads"
-    On Error GoTo 0
-    path = Application.GetOpenFilename("DRE-rapport (*.xlsx;*.xls;*.xlsm;*.csv),*.xlsx;*.xls;*.xlsm;*.csv", , "Välj DRE-rapporten")
-    If VarType(path) = vbBoolean Then Exit Sub
+    Dim path As Variant, cand As String
+    path = ""
+    cand = NewestDre()
+    If Len(cand) > 0 Then
+        If MsgBox("Använda den senaste DRE-rapporten?" & vbLf & vbLf & Mid$(cand, InStrRev(cand, "\") + 1) & vbLf & _
+                  "Sparad " & Format$(FileDateTime(cand), "yyyy-mm-dd HH:nn"), vbYesNo + vbQuestion) = vbYes Then path = cand
+    End If
+    If Len(path) = 0 Then
+        On Error Resume Next
+        ChDrive Environ$("USERPROFILE")
+        ChDir Environ$("USERPROFILE") & "\Downloads"
+        On Error GoTo 0
+        path = Application.GetOpenFilename("DRE-rapport (*.xlsx;*.xls;*.xlsm;*.csv),*.xlsx;*.xls;*.xlsm;*.csv", , "Välj DRE-rapporten")
+        If VarType(path) = vbBoolean Then Exit Sub
+    End If
 
     Dim d As String, t As String
     d = Format$(Now, "MMdd")   ' dagens datum och tid, ingen fråga
@@ -67,19 +75,25 @@ Public Sub ImporteraDRE2()
     ' Dropbox Number lämnas tomt (kolumn T)
     db = ""
 
-    Dim src As Workbook, wsSrc As Worksheet
-    Dim headerRow As Long, lastRow As Long, r As Long, i As Long, n As Long, rowsMax As Long
+    Dim src As Workbook, wsSrc As Worksheet, wOpen As Workbook, closeSrc As Boolean
+    Dim headerRow As Long, lastRow As Long, r As Long, i As Long, n As Long
     Dim srcCols() As Long, missing As String, out() As Variant, v As Variant
     Dim vals() As Variant, cn As WorkbookConnection, msg As String
     Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
-    Dim s As String, lim As Long, noSvc As Long
+    Dim s As String, lim As Long, noSvc As Long, data As Variant, rowsMax As Long
     Dim colOrigin As Long, skipOrigin As Long, skipDest As Long, skipScan As Long, hdrLastCol As Long, colPup As Long, hasPup As Boolean
 
     Application.ScreenUpdating = False
     On Error GoTo Fail
 
     ' --- Läs DRE-filen ------------------------------------------------------
-    Set src = Workbooks.Open(Filename:=CStr(path), ReadOnly:=True, UpdateLinks:=0)
+    For Each wOpen In Application.Workbooks            ' filen kan redan vara öppen i Excel
+        If StrComp(wOpen.FullName, CStr(path), vbTextCompare) = 0 Then Set src = wOpen
+    Next wOpen
+    If src Is Nothing Then
+        Set src = Workbooks.Open(Filename:=CStr(path), ReadOnly:=True, UpdateLinks:=0)
+        closeSrc = True
+    End If
     Set wsSrc = src.Worksheets(1)
 
     headerRow = FindHeaderRow(wsSrc)
@@ -110,33 +124,39 @@ Public Sub ImporteraDRE2()
     If colPup = 0 Then colPup = FindPrefixColumn(wsSrc, headerRow, hdrLastCol, "pup")
 
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, srcCols(0)).End(xlUp).Row
-    rowsMax = lastRow - headerRow
-    If rowsMax < 1 Then rowsMax = 1
+    If lastRow <= headerRow Then
+        msg = "DRE-filen innehåller inga rader."
+        GoTo Abort
+    End If
+
+    ' Hela tabellen läses på en gång och filtreras i minnet (mycket snabbare än cell för cell)
+    data = wsSrc.Range(wsSrc.Cells(headerRow + 1, 1), wsSrc.Cells(lastRow, hdrLastCol)).Value2
+    rowsMax = UBound(data, 1)
     ReDim out(1 To rowsMax, 0 To UBound(fields))
-    For r = headerRow + 1 To lastRow
-        If Len(Trim$(CStr(wsSrc.Cells(r, srcCols(0)).Value2))) > 0 Then
+    For r = 1 To rowsMax
+        If Len(TextOf(data(r, srcCols(0)))) > 0 Then
             If colPup > 0 Then
-                hasPup = CellHasValue(wsSrc, r, colPup)
+                hasPup = (Len(TextOf(data(r, colPup))) > 0)
             Else
-                hasPup = HasPickupScan(wsSrc, r, hdrLastCol)   ' reserv: någon cell är exakt PUP/PUX
+                hasPup = RowHasPupText(data, r, hdrLastCol)   ' reserv: någon cell är exakt PUP/PUX
             End If
             If hasPup Then
                 skipScan = skipScan + 1                   ' raden har redan PUP/PUX
-            ElseIf UCase$(Trim$(CStr(wsSrc.Cells(r, colOrigin).Value2))) <> "SE" Then
+            ElseIf UCase$(TextOf(data(r, colOrigin))) <> "SE" Then
                 skipOrigin = skipOrigin + 1               ' ursprungsland är inte SE
-            ElseIf UCase$(Trim$(CStr(wsSrc.Cells(r, srcCols(3)).Value2))) = "SE" Then
+            ElseIf UCase$(TextOf(data(r, srcCols(3)))) = "SE" Then
                 skipDest = skipDest + 1                   ' destinationsland är SE
             Else
                 n = n + 1
                 For i = 0 To UBound(fields)
-                    v = wsSrc.Cells(r, srcCols(i)).Value2
+                    v = data(r, srcCols(i))
                     If VarType(v) = vbString Then v = Trim$(v)   ' siffror lämnas som siffror, som vid kopiera-klistra
                     out(n, i) = v
                 Next i
             End If
         End If
     Next r
-    src.Close SaveChanges:=False
+    If closeSrc Then src.Close SaveChanges:=False
     Set src = Nothing
 
     If n = 0 Then
@@ -177,30 +197,11 @@ Public Sub ImporteraDRE2()
 
             ' Power Query gör Track Time till tal, så 0905 blir 905 - fyll ut till 4 tecken
             Set rngT = ColumnRange(loPup, "Track Time", lim)
-            If Not rngT Is Nothing Then
-                For Each cl In rngT.Cells
-                    s = CStr(cl.Value2)
-                    If Len(s) > 0 And Len(s) < 4 Then
-                        If s Like String(Len(s), "#") Then
-                            cl.NumberFormat = "@"
-                            cl.Value2 = Right$("0000" & s, 4)
-                        End If
-                    End If
-                Next cl
-            End If
+            If Not rngT Is Nothing Then PadTimes rngT
 
+            ' Tomma Base Service (gula rutor) fylls med 01
             Set rngS = ColumnRange(loPup, "Base Service", lim)
-            If Not rngS Is Nothing Then
-                For Each cl In rngS.Cells
-                    If Not IsError(cl.Value2) Then
-                        If Len(CStr(cl.Value2)) = 0 Then
-                            cl.NumberFormat = "@"
-                            cl.Value2 = "01"             ' tom Base Service (gul ruta) fylls med 01
-                            noSvc = noSvc + 1
-                        End If
-                    End If
-                Next cl
-            End If
+            If Not rngS Is Nothing Then noSvc = FillBaseService(rngS)
         End If
     End If
 
@@ -231,7 +232,7 @@ Public Sub ImporteraDRE2()
 
 Abort:
     On Error Resume Next
-    If Not src Is Nothing Then src.Close SaveChanges:=False
+    If Not src Is Nothing And closeSrc Then src.Close SaveChanges:=False
     Application.ScreenUpdating = True
     MsgBox msg, vbCritical
     Exit Sub
@@ -239,7 +240,7 @@ Abort:
 Fail:
     msg = "Något gick fel: " & Err.Description
     On Error Resume Next
-    If Not src Is Nothing Then src.Close SaveChanges:=False
+    If Not src Is Nothing And closeSrc Then src.Close SaveChanges:=False
     Application.ScreenUpdating = True
     MsgBox msg, vbCritical
 End Sub
@@ -310,35 +311,115 @@ Private Function FindPrefixColumn(ws As Worksheet, headerRow As Long, lastCol As
     Next c
 End Function
 
-' Sant om cellen innehåller något.
-Private Function CellHasValue(ws As Worksheet, r As Long, c As Long) As Boolean
-    Dim v As Variant
-    v = ws.Cells(r, c).Value2
+' Cellvärdet som text; fel (#N/A osv) räknas som ett värde.
+Private Function TextOf(v As Variant) As String
     If IsError(v) Then
-        CellHasValue = True
+        TextOf = "#FEL"
     Else
-        CellHasValue = (Len(Trim$(CStr(v))) > 0)
+        TextOf = Trim$(CStr(v))
     End If
 End Function
 
-' Sant om någon cell i raden är exakt PUP eller PUX (redan skannad som upphämtad).
-Private Function HasPickupScan(ws As Worksheet, r As Long, lastCol As Long) As Boolean
-    Dim a As Variant, c As Long, t As String
-    a = ws.Range(ws.Cells(r, 1), ws.Cells(r, lastCol)).Value2
-    If Not IsArray(a) Then
-        t = UCase$(Trim$(CStr(a)))
-        HasPickupScan = (t = "PUP" Or t = "PUX")
-        Exit Function
-    End If
+' Sant om någon cell i raden r är exakt PUP eller PUX.
+Private Function RowHasPupText(data As Variant, r As Long, lastCol As Long) As Boolean
+    Dim c As Long, t As String
     For c = 1 To lastCol
-        If Not IsError(a(1, c)) Then
-            t = UCase$(Trim$(CStr(a(1, c))))
-            If t = "PUP" Or t = "PUX" Then
-                HasPickupScan = True
+        t = UCase$(TextOf(data(r, c)))
+        If t = "PUP" Or t = "PUX" Then
+            RowHasPupText = True
+            Exit Function
+        End If
+    Next c
+End Function
+
+' Området som tvådimensionell matris (även om det bara är en cell).
+Private Function Cells2D(rng As Range) As Variant
+    Dim a As Variant, one(1 To 1, 1 To 1) As Variant
+    a = rng.Value2
+    If IsArray(a) Then
+        Cells2D = a
+    Else
+        one(1, 1) = a
+        Cells2D = one
+    End If
+End Function
+
+' Fyller ut Track Time till 4 tecken, hela kolumnen i ett steg.
+Private Sub PadTimes(rng As Range)
+    Dim a As Variant, r As Long, t As String, changed As Boolean
+    a = Cells2D(rng)
+    For r = 1 To UBound(a, 1)
+        If Not IsError(a(r, 1)) Then
+            t = CStr(a(r, 1))
+            If Len(t) > 0 And Len(t) < 4 Then
+                If t Like String(Len(t), "#") Then
+                    a(r, 1) = Right$("0000" & t, 4)
+                    changed = True
+                End If
+            End If
+        End If
+    Next r
+    If changed Then
+        rng.NumberFormat = "@"
+        rng.Value2 = a
+    End If
+End Sub
+
+' Skriver 01 i tomma Base Service, hela kolumnen i ett steg. Returnerar hur många som fylldes.
+Private Function FillBaseService(rng As Range) As Long
+    Dim a As Variant, r As Long, cnt As Long
+    a = Cells2D(rng)
+    For r = 1 To UBound(a, 1)
+        If Not IsError(a(r, 1)) Then
+            If Len(CStr(a(r, 1))) = 0 Then
+                a(r, 1) = "01"
+                cnt = cnt + 1
+            End If
+        End If
+    Next r
+    If cnt > 0 Then
+        rng.NumberFormat = "@"
+        rng.Value2 = a
+    End If
+    FillBaseService = cnt
+End Function
+
+' Den PUP1-arbetsbok som är öppen (bladen Data och PUP samt tabellen med Tracking Number).
+Private Function FindPup1() As Workbook
+    Dim w As Workbook, ws As Worksheet, wp As Worksheet
+    For Each w In Application.Workbooks
+        Set ws = Nothing
+        Set wp = Nothing
+        On Error Resume Next
+        Set ws = w.Worksheets(DATA_SHEET)
+        Set wp = w.Worksheets(PUP_SHEET)
+        On Error GoTo 0
+        If Not ws Is Nothing And Not wp Is Nothing Then
+            If Not FindTable(ws, "Tracking Number") Is Nothing Then
+                Set FindPup1 = w
                 Exit Function
             End If
         End If
-    Next c
+    Next w
+End Function
+
+' Senast sparade DRE-rapport (DREReport*) i Downloads, eller tom text om ingen finns.
+Private Function NewestDre() As String
+    Dim folder As String, f As String, best As String, bestT As Date, ext As Variant, t As Date
+    On Error Resume Next
+    folder = Environ$("USERPROFILE") & "\Downloads\"
+    For Each ext In Array("csv", "xlsx", "xls")
+        f = Dir(folder & "DREReport*." & ext)
+        Do While Len(f) > 0
+            t = FileDateTime(folder & f)
+            If t > bestT Then
+                bestT = t
+                best = folder & f
+            End If
+            f = Dir
+        Loop
+    Next ext
+    NewestDre = best
 End Function
 
 ' Texten i första dataraden i kolumnen vars rubrik börjar med headerStart.

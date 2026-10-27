@@ -11,8 +11,10 @@ Installation (en gång). PUP1:s VBA-projekt är lösenordsskyddat, så makrot l�
 2. `Alt + F11` → **File → Import File…** → välj `PUP_Import.bas`.
 
 Varje gång:
-1. Öppna både PUP_Import.xlsm och PUP1.xlsm.
-2. Klicka på PUP1-fönstret så att den är aktiv, tryck `Alt + F8` och kör `PUP_Import.xlsm!ImporteraDRE2`.
+1. Ha PUP1.xlsm och PUP_Import.xlsm öppna. Du behöver inte klicka på PUP1 först – makrot hittar den själv.
+2. Kör `ImporteraDRE2` (snabbknapp i verktygsfältet eller `Alt + F8`).
+3. Makrot föreslår den senaste `DREReport…` i Downloads – svara Ja (Nej öppnar filväljaren).
+4. Läs resultatet, bekräfta skicka-frågan och logga in.
 
 Båda tar bara med rader där Origin Cntry = SE och Dest Cntry inte är SE, och hoppar över rader där kolumnen **PUP PUX** i DRE inte är tom (de har redan en upphämtningsscan). Origin Cntry måste finnas
 bland fälten i DRE-rapporten, annars stannar de med ett meddelande.

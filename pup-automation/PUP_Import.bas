@@ -3,7 +3,7 @@ Option Explicit
 
 ' Importerar en DRE-rapport i PUP1 och uppdaterar bladet PUP i ett steg:
 '   1. Valj DRE-filen (xlsx/xls/xlsm/csv)
-'   2. Fyll i Track Date / Track Time (forifyllda med nu)
+'   2. Track Date / Track Time sätts automatiskt till nu
 '      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
 '   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
@@ -45,10 +45,8 @@ Public Sub ImporteraDRE()
     If VarType(path) = vbBoolean Then Exit Sub
 
     Dim d As String, t As String
-    d = InputBox("Track Date (MMdd):", "PUP", Format$(Now, "MMdd"))
-    If Len(d) = 0 Then Exit Sub
-    t = InputBox("Track Time (HHmm):", "PUP", Format$(Now, "HHmm"))
-    If Len(t) = 0 Then Exit Sub
+    d = Format$(Now, "MMdd")   ' dagens datum och tid, ingen fråga
+    t = Format$(Now, "HHmm")
     If Not (d Like "####") Or Not (t Like "####") Then
         MsgBox "Datum och tid ska vara fyra siffror, t.ex. 0521 och 0905.", vbExclamation
         Exit Sub

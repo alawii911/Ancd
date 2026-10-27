@@ -4,7 +4,7 @@ Option Explicit
 ' Importerar en DRE-rapport i PUP1 och uppdaterar bladet PUP i ett steg:
 '   1. Valj DRE-filen (xlsx/xls/xlsm/csv)
 '   2. Track Date / Track Time sätts automatiskt till nu
-'      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med
+'      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med, rader med PUP/PUX hoppas över
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
 '   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
 '   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905), kolumn T (Dropbox Number) lämnas tomt och bladet PUP visas
@@ -73,7 +73,7 @@ Public Sub ImporteraDRE()
     Dim vals() As Variant, cn As WorkbookConnection, msg As String
     Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
     Dim s As String, lim As Long, noSvc As Long
-    Dim colOrigin As Long, skipOrigin As Long, skipDest As Long
+    Dim colOrigin As Long, skipOrigin As Long, skipDest As Long, skipScan As Long, hdrLastCol As Long
 
     Application.ScreenUpdating = False
     On Error GoTo Fail
@@ -104,13 +104,16 @@ Public Sub ImporteraDRE()
         GoTo Abort
     End If
 
+    hdrLastCol = wsSrc.Cells(headerRow, wsSrc.Columns.Count).End(xlToLeft).Column
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, srcCols(0)).End(xlUp).Row
     rowsMax = lastRow - headerRow
     If rowsMax < 1 Then rowsMax = 1
     ReDim out(1 To rowsMax, 0 To UBound(fields))
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(wsSrc.Cells(r, srcCols(0)).Value2))) > 0 Then
-            If UCase$(Trim$(CStr(wsSrc.Cells(r, colOrigin).Value2))) <> "SE" Then
+            If HasPickupScan(wsSrc, r, hdrLastCol) Then
+                skipScan = skipScan + 1                   ' raden har redan PUP/PUX
+            ElseIf UCase$(Trim$(CStr(wsSrc.Cells(r, colOrigin).Value2))) <> "SE" Then
                 skipOrigin = skipOrigin + 1               ' ursprungsland är inte SE
             ElseIf UCase$(Trim$(CStr(wsSrc.Cells(r, srcCols(3)).Value2))) = "SE" Then
                 skipDest = skipDest + 1                   ' destinationsland är SE
@@ -128,7 +131,7 @@ Public Sub ImporteraDRE()
     Set src = Nothing
 
     If n = 0 Then
-        msg = "Inga rader kvar efter filtret (Origin Cntry = SE, Dest Cntry inte SE)." & vbLf & skipOrigin & " rader hade annat ursprungsland, " & skipDest & " rader gick till SE."
+        msg = "Inga rader kvar efter filtret (Origin Cntry = SE, Dest Cntry inte SE, ingen PUP/PUX)." & vbLf & skipScan & " rader har PUP/PUX, " & skipOrigin & " annat ursprungsland, " & skipDest & " gick till SE."
         GoTo Abort
     End If
 
@@ -204,7 +207,7 @@ Public Sub ImporteraDRE()
     On Error GoTo 0
 
     msg = n & " försändelser importerade och PUP är uppdaterad. Kör nu Validate Scans."
-    If skipOrigin + skipDest > 0 Then msg = msg & vbLf & vbLf & "Hoppade över " & skipOrigin + skipDest & " rader: " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE."
+    If skipScan + skipOrigin + skipDest > 0 Then msg = msg & vbLf & vbLf & "Hoppade över " & skipScan + skipOrigin + skipDest & " rader: " & skipScan & " med PUP/PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE."
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & vbLf & noSvc & " rader har ingen Base Service (värdet finns inte i Service-tabellen)."
     MsgBox msg, vbInformation
@@ -278,6 +281,26 @@ Private Sub SetParam(lo As ListObject, headerStart As String, v As Variant)
         End If
     Next c
 End Sub
+
+' Sant om någon cell i raden är exakt PUP eller PUX (redan skannad som upphämtad).
+Private Function HasPickupScan(ws As Worksheet, r As Long, lastCol As Long) As Boolean
+    Dim a As Variant, c As Long, t As String
+    a = ws.Range(ws.Cells(r, 1), ws.Cells(r, lastCol)).Value2
+    If Not IsArray(a) Then
+        t = UCase$(Trim$(CStr(a)))
+        HasPickupScan = (t = "PUP" Or t = "PUX")
+        Exit Function
+    End If
+    For c = 1 To lastCol
+        If Not IsError(a(1, c)) Then
+            t = UCase$(Trim$(CStr(a(1, c))))
+            If t = "PUP" Or t = "PUX" Then
+                HasPickupScan = True
+                Exit Function
+            End If
+        End If
+    Next c
+End Function
 
 ' Texten i första dataraden i kolumnen vars rubrik börjar med headerStart.
 Private Function ParamText(lo As ListObject, headerStart As String) As String

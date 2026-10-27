@@ -15,7 +15,7 @@ Private Const PUP_SHEET As String = "PUP"
 ' PUP1-arbetsboken som uppdateras (den aktiva när makrot startas)
 Private wb As Workbook
 
-Public Sub ImporteraDRE()
+Public Sub ImporteraDRE2()
     Dim fields As Variant
     fields = Array("Tracking Number", "Form ID", "Dest City Name", "Dest Cntry", _
                    "Dest Postal Cd", "Base Service", "Pkg Type")
@@ -221,7 +221,9 @@ Public Sub ImporteraDRE()
 
     msg = n & " försändelser importerade och PUP är uppdaterad."
     If colPup = 0 Then msg = msg & vbLf & vbLf & "Hittade ingen PUP PUX-kolumn i DRE-filen - letade efter cellen PUP/PUX i stället."
-    If skipScan + skipOrigin + skipDest > 0 Then msg = msg & vbLf & vbLf & "Hoppade över " & skipScan + skipOrigin + skipDest & " rader: " & skipScan & " med PUP/PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE."
+    msg = msg & vbLf & vbLf & "DRE-filen hade " & n + skipScan + skipOrigin + skipDest & " rader, " & n & " togs med." & vbLf & _
+          "Hoppade över: " & skipScan & " med PUP PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE." & vbLf & _
+          "(Makro ImporteraDRE2 - Origin Cntry i kolumn " & colOrigin & ", PUP PUX " & IIf(colPup > 0, "i kolumn " & colPup, "saknas") & ")"
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Base Service och fick 01."
     ValidateAndSend n, msg

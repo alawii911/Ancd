@@ -60,9 +60,9 @@ Public Sub ImporteraDRE()
     If stopVal = "R" Or stopVal = "D" Then
         db = Trim$(CStr(ThisWorkbook.Worksheets(PUP_SHEET).Range("T3").Value2))
         If Not (db Like "#*") Then db = ""
-        db = InputBox("Dropbox Number (1-7 siffror). Krävs för Stop Type " & stopVal & " - utan det blir alla rader FAIL:", "PUP", db)
+        db = InputBox("Dropbox Number (valfritt, 1-7 siffror). Lämna tomt för att hoppa över:", "PUP", db)
         If Len(db) = 0 Then
-            If MsgBox("Utan Dropbox Number blir alla rader FAIL i valideringen." & vbLf & vbLf & "Fortsätta ändå?", vbYesNo + vbExclamation) = vbNo Then Exit Sub
+            ' hoppas över - Validate Scans ger FAIL, men Send Scans kontrollerar inte det
         ElseIf Len(db) > 7 Or Not (db Like String(Len(db), "#")) Then
             MsgBox "Dropbox Number ska vara 1-7 siffror.", vbExclamation
             Exit Sub

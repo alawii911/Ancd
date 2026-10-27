@@ -18,6 +18,20 @@ Makrot:
 - fyller ut Track Time till fyra tecken (frågan gör annars 0905 till 905)
 - säger till om några rader inte får någon Base Service
 
+- varnar om Track Date ligger 7 dagar eller mer från idag (valideringen ger FAIL på det)
+- frågar efter Dropbox Number när Stop Type är R eller D och skriver det i kolumn T på PUP
+
+## Varför rader blir FAIL i Validate Scans
+
+Reglerna ligger i PUP1:s egen kod (modulen FWSMain):
+- Stop Type R eller D kräver ett numeriskt Dropbox Number (1–7 siffror) i kolumn T.
+- Track Date får vara högst 6 dagar från idag, åt båda håll.
+- Base Service måste vara 01, 04, 06, 18, 70 eller 86 (EC, RL, RM, 2A, 2P godkänns inte).
+- Pkg Type måste vara 01, 02, 03, 04, 06, 15 eller 25.
+- Dest City (första bokstaven) och Dest Cntry får bara innehålla A–Z.
+- Track Time: timme 01–24.
+- Validate och Send hanterar bara rad 3–1000.
+
 Siffror i DRE-filen skrivs som siffror (som vid kopiera–klistra), annars matchar inte
 Base Service mot Service-tabellen.
 

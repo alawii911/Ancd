@@ -6,7 +6,7 @@ Option Explicit
 '   2. Fyll i Track Date / Track Time (forifyllda med nu)
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
 '   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
-'   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905) och bladet PUP visas
+'   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905), Dropbox Number sätts i kolumn T och bladet PUP visas
 
 Private Const DATA_SHEET As String = "Data"
 Private Const PUP_SHEET As String = "PUP"
@@ -42,6 +42,31 @@ Public Sub ImporteraDRE()
     If Not (d Like "####") Or Not (t Like "####") Then
         MsgBox "Datum och tid ska vara fyra siffror, t.ex. 0521 och 0905.", vbExclamation
         Exit Sub
+    End If
+
+    ' --- Samma krav som Validate Scans ställer, så att du slipper FAIL på alla rader ---
+    Dim dt As Date, diff As Long, stopVal As String, db As String
+    dt = DateSerial(Year(Now), CLng(Left$(d, 2)), CLng(Right$(d, 2)))
+    If Month(dt) <> CLng(Left$(d, 2)) Or Day(dt) <> CLng(Right$(d, 2)) Then
+        MsgBox "Track Date " & d & " är inte ett giltigt datum.", vbExclamation
+        Exit Sub
+    End If
+    diff = DateDiff("d", Now, dt)
+    If diff >= 7 Or diff <= -7 Then
+        If MsgBox("Track Date " & d & " ligger mer än 7 dagar från idag. Valideringen i PUP1 ger FAIL på det." & vbLf & vbLf & "Fortsätta ändå?", vbYesNo + vbExclamation) = vbNo Then Exit Sub
+    End If
+
+    stopVal = UCase$(ParamText(loParam, "Stop Type"))
+    If stopVal = "R" Or stopVal = "D" Then
+        db = Trim$(CStr(ThisWorkbook.Worksheets(PUP_SHEET).Range("T3").Value2))
+        If Not (db Like "#*") Then db = ""
+        db = InputBox("Dropbox Number (1-7 siffror). Krävs för Stop Type " & stopVal & " - utan det blir alla rader FAIL:", "PUP", db)
+        If Len(db) = 0 Then
+            If MsgBox("Utan Dropbox Number blir alla rader FAIL i valideringen." & vbLf & vbLf & "Fortsätta ändå?", vbYesNo + vbExclamation) = vbNo Then Exit Sub
+        ElseIf Len(db) > 7 Or Not (db Like String(Len(db), "#")) Then
+            MsgBox "Dropbox Number ska vara 1-7 siffror.", vbExclamation
+            Exit Sub
+        End If
     End If
 
     Dim src As Workbook, wsSrc As Worksheet
@@ -152,12 +177,22 @@ Public Sub ImporteraDRE()
         End If
     End If
 
+    ' Dropbox Number (kolumn T) ligger utanför frågan - fyll alla rader, rensa gamla värden
+    With ThisWorkbook.Worksheets(PUP_SHEET)
+        .Range("T3:T1000").ClearContents
+        If Len(db) > 0 Then
+            .Range("T3").Resize(n, 1).NumberFormat = "@"
+            .Range("T3").Resize(n, 1).Value2 = db
+        End If
+    End With
+
     Application.ScreenUpdating = True
     On Error Resume Next
     ThisWorkbook.Worksheets(PUP_SHEET).Activate
     On Error GoTo 0
 
-    msg = n & " försändelser importerade och PUP är uppdaterad."
+    msg = n & " försändelser importerade och PUP är uppdaterad. Kör nu Validate Scans."
+    If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & vbLf & noSvc & " rader har ingen Base Service (värdet finns inte i Service-tabellen)."
     MsgBox msg, vbInformation
     Exit Sub
@@ -201,6 +236,17 @@ Private Sub SetParam(lo As ListObject, headerStart As String, v As Variant)
         End If
     Next c
 End Sub
+
+' Texten i första dataraden i kolumnen vars rubrik börjar med headerStart.
+Private Function ParamText(lo As ListObject, headerStart As String) As String
+    Dim c As ListColumn
+    For Each c In lo.ListColumns
+        If Norm(c.Name) Like Norm(headerStart) & "*" Then
+            ParamText = Trim$(CStr(c.DataBodyRange.Cells(1, 1).Value2))
+            Exit Function
+        End If
+    Next c
+End Function
 
 ' De första cnt raderna i kolumnen vars rubrik börjar med headerStart.
 Private Function ColumnRange(lo As ListObject, headerStart As String, cnt As Long) As Range

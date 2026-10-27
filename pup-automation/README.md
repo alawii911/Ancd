@@ -4,12 +4,15 @@ Två sätt att fylla PUP1 från en DRE-rapport. Båda gör samma sak som Power Q
 
 ## 1. Makro i PUP1 (rekommenderas) – `PUP_Import.bas`
 
-Knapp i PUP1-filen: välj DRE-fil, bekräfta datum och tid, så fylls Data-bladet och PUP uppdateras.
+Välj DRE-fil, bekräfta datum och tid, så fylls Data-bladet och PUP uppdateras.
 
-Installation (en gång, i den riktiga PUP1.xlsm):
-1. `Alt + F11` → **File → Import File…** → välj `PUP_Import.bas`.
-2. Lägg en knapp på bladet Data eller PUP: **Developer → Insert → Button (Form Control)** → tilldela makrot `ImporteraDRE`.
-   (Eller kör det med `Alt + F8`.)
+Installation (en gång). PUP1:s VBA-projekt är lösenordsskyddat, så makrot läggs i en egen fil:
+1. Skapa en ny tom arbetsbok och spara den som **PUP_Import.xlsm** (Excel-arbetsbok med makron).
+2. `Alt + F11` → **File → Import File…** → välj `PUP_Import.bas`.
+
+Varje gång:
+1. Öppna både PUP_Import.xlsm och PUP1.xlsm.
+2. Klicka på PUP1-fönstret så att den är aktiv, tryck `Alt + F8` och kör `PUP_Import.xlsm!ImporteraDRE`.
 
 Makrot:
 - tömmer och fyller Table1 (A–G) med exakt så många rader som behövs

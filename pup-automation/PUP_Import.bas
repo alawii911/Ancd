@@ -11,17 +11,26 @@ Option Explicit
 Private Const DATA_SHEET As String = "Data"
 Private Const PUP_SHEET As String = "PUP"
 
+' PUP1-arbetsboken som uppdateras (den aktiva när makrot startas)
+Private wb As Workbook
+
 Public Sub ImporteraDRE()
     Dim fields As Variant
     fields = Array("Tracking Number", "Form ID", "Dest City Name", "Dest Cntry", _
                    "Dest Postal Cd", "Base Service", "Pkg Type")
 
     Dim wsData As Worksheet, loData As ListObject, loParam As ListObject
-    Set wsData = ThisWorkbook.Worksheets(DATA_SHEET)
-    Set loData = FindTable(wsData, "Tracking Number")
-    Set loParam = FindTable(wsData, "LocID")
+    Set wb = ActiveWorkbook
+    On Error Resume Next
+    Set wsData = wb.Worksheets(DATA_SHEET)
+    On Error GoTo 0
+    If Not wsData Is Nothing Then
+        Set loData = FindTable(wsData, "Tracking Number")
+        Set loParam = FindTable(wsData, "LocID")
+    End If
     If loData Is Nothing Or loParam Is Nothing Then
-        MsgBox "Hittar inte tabellerna med 'Tracking Number' och 'LocID' på bladet '" & DATA_SHEET & "'.", vbCritical
+        MsgBox "Den aktiva arbetsboken (" & wb.Name & ") är inte PUP1." & vbLf & vbLf & _
+               "Öppna PUP1, klicka på dess fönster och kör makrot igen.", vbExclamation
         Exit Sub
     End If
 
@@ -58,7 +67,7 @@ Public Sub ImporteraDRE()
 
     stopVal = UCase$(ParamText(loParam, "Stop Type"))
     If stopVal = "R" Or stopVal = "D" Then
-        db = Trim$(CStr(ThisWorkbook.Worksheets(PUP_SHEET).Range("T3").Value2))
+        db = Trim$(CStr(wb.Worksheets(PUP_SHEET).Range("T3").Value2))
         If Not (db Like "#*") Then db = ""
         db = InputBox("Dropbox Number (valfritt, 1-7 siffror). Lämna tomt för att hoppa över:", "PUP", db)
         If Len(db) = 0 Then
@@ -138,15 +147,15 @@ Public Sub ImporteraDRE()
 
     ' --- Uppdatera (PUP-bladet byggs av Power Query) ----------------------------
     On Error Resume Next
-    For Each cn In ThisWorkbook.Connections
+    For Each cn In wb.Connections
         cn.OLEDBConnection.BackgroundQuery = False
     Next cn
     On Error GoTo Fail
-    ThisWorkbook.RefreshAll
+    wb.RefreshAll
     Application.CalculateUntilAsyncQueriesDone
 
     ' --- Efterarbete på PUP-bladet ----------------------------------------------
-    Set loPup = FindTable(ThisWorkbook.Worksheets(PUP_SHEET), "AWB Number")
+    Set loPup = FindTable(wb.Worksheets(PUP_SHEET), "AWB Number")
     If Not loPup Is Nothing Then
         If Not loPup.DataBodyRange Is Nothing Then
             lim = loPup.DataBodyRange.Rows.Count
@@ -178,7 +187,7 @@ Public Sub ImporteraDRE()
     End If
 
     ' Dropbox Number (kolumn T) ligger utanför frågan - fyll alla rader, rensa gamla värden
-    With ThisWorkbook.Worksheets(PUP_SHEET)
+    With wb.Worksheets(PUP_SHEET)
         .Range("T3:T1000").ClearContents
         If Len(db) > 0 Then
             .Range("T3").Resize(n, 1).NumberFormat = "@"
@@ -188,7 +197,8 @@ Public Sub ImporteraDRE()
 
     Application.ScreenUpdating = True
     On Error Resume Next
-    ThisWorkbook.Worksheets(PUP_SHEET).Activate
+    wb.Activate
+    wb.Worksheets(PUP_SHEET).Activate
     On Error GoTo 0
 
     msg = n & " försändelser importerade och PUP är uppdaterad. Kör nu Validate Scans."

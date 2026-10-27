@@ -4,6 +4,7 @@ Option Explicit
 ' Importerar en DRE-rapport i PUP1 och uppdaterar bladet PUP i ett steg:
 '   1. Valj DRE-filen (xlsx/xls/xlsm/csv)
 '   2. Fyll i Track Date / Track Time (forifyllda med nu)
+'      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
 '   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
 '   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905), Dropbox Number sätts i kolumn T och bladet PUP visas
@@ -84,6 +85,7 @@ Public Sub ImporteraDRE()
     Dim vals() As Variant, cn As WorkbookConnection, msg As String
     Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
     Dim s As String, lim As Long, noSvc As Long
+    Dim colOrigin As Long, skipOrigin As Long, skipDest As Long
 
     Application.ScreenUpdating = False
     On Error GoTo Fail
@@ -108,25 +110,37 @@ Public Sub ImporteraDRE()
         GoTo Abort
     End If
 
+    colOrigin = FindColumn(wsSrc, headerRow, "Origin Cntry")
+    If colOrigin = 0 Then
+        msg = "Kolumnen 'Origin Cntry' saknas i DRE-filen. Lägg till den bland rapportens fält i DRE."
+        GoTo Abort
+    End If
+
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, srcCols(0)).End(xlUp).Row
     rowsMax = lastRow - headerRow
     If rowsMax < 1 Then rowsMax = 1
     ReDim out(1 To rowsMax, 0 To UBound(fields))
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(wsSrc.Cells(r, srcCols(0)).Value2))) > 0 Then
-            n = n + 1
-            For i = 0 To UBound(fields)
-                v = wsSrc.Cells(r, srcCols(i)).Value2
-                If VarType(v) = vbString Then v = Trim$(v)   ' siffror lämnas som siffror, som vid kopiera-klistra
-                out(n, i) = v
-            Next i
+            If UCase$(Trim$(CStr(wsSrc.Cells(r, colOrigin).Value2))) <> "SE" Then
+                skipOrigin = skipOrigin + 1               ' ursprungsland är inte SE
+            ElseIf UCase$(Trim$(CStr(wsSrc.Cells(r, srcCols(3)).Value2))) = "SE" Then
+                skipDest = skipDest + 1                   ' destinationsland är SE
+            Else
+                n = n + 1
+                For i = 0 To UBound(fields)
+                    v = wsSrc.Cells(r, srcCols(i)).Value2
+                    If VarType(v) = vbString Then v = Trim$(v)   ' siffror lämnas som siffror, som vid kopiera-klistra
+                    out(n, i) = v
+                Next i
+            End If
         End If
     Next r
     src.Close SaveChanges:=False
     Set src = Nothing
 
     If n = 0 Then
-        msg = "DRE-filen innehåller inga rader."
+        msg = "Inga rader kvar efter filtret (Origin Cntry = SE, Dest Cntry inte SE)." & vbLf & skipOrigin & " rader hade annat ursprungsland, " & skipDest & " rader gick till SE."
         GoTo Abort
     End If
 
@@ -202,6 +216,7 @@ Public Sub ImporteraDRE()
     On Error GoTo 0
 
     msg = n & " försändelser importerade och PUP är uppdaterad. Kör nu Validate Scans."
+    If skipOrigin + skipDest > 0 Then msg = msg & vbLf & vbLf & "Hoppade över " & skipOrigin + skipDest & " rader: " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE."
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & vbLf & noSvc & " rader har ingen Base Service (värdet finns inte i Service-tabellen)."
     MsgBox msg, vbInformation
@@ -305,6 +320,7 @@ Private Function IsAlias(field As String, header As String) As Boolean
         Case "Dest Postal Cd":  a = Array("destpostalcd", "destpostalcode", "destinationpostalcode", "destzip", "destpostal")
         Case "Base Service":    a = Array("baseservice", "baseservicecd", "service")
         Case "Pkg Type":        a = Array("pkgtype", "packagetype", "pkgtypecd")
+        Case "Origin Cntry":    a = Array("origincntry", "origincountry", "origcntry", "origcountry", "origincntrycd", "origincountrycode", "shippercountry", "shippercntry")
         Case Else:              a = Array(Norm(field))
     End Select
     For Each x In a

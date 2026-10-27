@@ -14,6 +14,9 @@ Varje gång:
 1. Öppna både PUP_Import.xlsm och PUP1.xlsm.
 2. Klicka på PUP1-fönstret så att den är aktiv, tryck `Alt + F8` och kör `PUP_Import.xlsm!ImporteraDRE`.
 
+Båda tar bara med rader där Origin Cntry = SE och Dest Cntry inte är SE. Origin Cntry måste finnas
+bland fälten i DRE-rapporten, annars stannar de med ett meddelande.
+
 Makrot:
 - tömmer och fyller Table1 (A–G) med exakt så många rader som behövs
 - sätter Track Date och Track Time i Table2 (J–O); övriga fält där lämnas som de är

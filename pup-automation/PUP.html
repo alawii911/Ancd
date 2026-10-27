@@ -108,6 +108,7 @@ const ALIASES = {
   "Base Service": ["baseservice","baseservicecd","service"],
   "Pkg Type": ["pkgtype","packagetype","pkgtypecd"]
 };
+const ORIGIN_ALIASES = ["origincntry","origincountry","origcntry","origcountry","origincntrycd","origincountrycode","shippercountry","shippercntry"];
 // Samma som fliken "Service" (Base Svc -> Service)
 const SERVICE = {"1":"01","4":"04","6":"06","18":"18","70":"70","86":"86","EC":"EC","RL":"RL","RM":"RM","2A":"2A","2P":"2P"};
 const PARAMS = [
@@ -162,10 +163,22 @@ async function handleFile(file) {
     const missing = FIELDS.filter((f, i) => cols[i] < 0);
     if (missing.length) return status("Kolumner saknas i filen: " + missing.join(", "), "err");
 
-    rows = grid.slice(hIdx + 1).map(r => cols.map(c => cell(r[c]))).filter(r => r[0] !== "");
+    const oIdx = header.findIndex(h => ORIGIN_ALIASES.includes(h));
+    if (oIdx < 0) return status("Kolumnen 'Origin Cntry' saknas i filen. Lägg till den bland rapportens fält i DRE.", "err");
+
+    let skipOrigin = 0, skipDest = 0;
+    rows = [];
+    for (const r of grid.slice(hIdx + 1)) {
+      const row = cols.map(c => cell(r[c]));
+      if (row[0] === "") continue;
+      if (cell(r[oIdx]).toUpperCase() !== "SE") { skipOrigin++; continue; }
+      if (row[3].toUpperCase() === "SE") { skipDest++; continue; }
+      rows.push(row);
+    }
     setNow();
     render();
-    const msg = `${file.name}: ${rows.length} försändelser inlästa.`;
+    let msg = `${file.name}: ${rows.length} försändelser inlästa.`;
+    if (skipOrigin + skipDest) msg += ` Hoppade över ${skipOrigin + skipDest}: ${skipOrigin} med annat ursprungsland än SE, ${skipDest} med Dest Cntry SE.`;
     if (unmapped) status(`${msg} OBS: ${unmapped} rader har en Base Service som inte finns i Service-tabellen (markerade, Base Service lämnas tom).`, "warn");
     else status(msg, rows.length ? "ok" : "warn");
   } catch (e) {

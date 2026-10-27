@@ -22,8 +22,8 @@ Makrot:
 - sätter Track Date och Track Time i Table2 (J–O); övriga fält där lämnas som de är
 - kör Refresh All så att PUP-bladet byggs av de befintliga frågorna
 - fyller ut Track Time till fyra tecken (frågan gör annars 0905 till 905)
-- säger till om några rader inte får någon Base Service
-- frågar sist om Validate Scans och Send Scans ska köras. Den kör PUP1:s egna knappar, frågar innan
+- fyller tomma Base Service (gula rutor) med 01
+- kör Validate Scans automatiskt och frågar sedan om Send Scans ska köras. Den kör PUP1:s egna knappar, frågar innan
   det skickar (extra varning vid FAIL) och du loggar in själv i PUP1:s ruta. Inloggningen sparas inte.
 
 - varnar om Track Date ligger 7 dagar eller mer från idag (valideringen ger FAIL på det)

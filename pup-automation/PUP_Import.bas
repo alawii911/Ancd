@@ -184,7 +184,11 @@ Public Sub ImporteraDRE()
             If Not rngS Is Nothing Then
                 For Each cl In rngS.Cells
                     If Not IsError(cl.Value2) Then
-                        If Len(CStr(cl.Value2)) = 0 Then noSvc = noSvc + 1
+                        If Len(CStr(cl.Value2)) = 0 Then
+                            cl.NumberFormat = "@"
+                            cl.Value2 = "01"             ' tom Base Service (gul ruta) fylls med 01
+                            noSvc = noSvc + 1
+                        End If
                     End If
                 Next cl
             End If
@@ -206,12 +210,11 @@ Public Sub ImporteraDRE()
     wb.Worksheets(PUP_SHEET).Activate
     On Error GoTo 0
 
-    msg = n & " försändelser importerade och PUP är uppdaterad. Kör nu Validate Scans."
+    msg = n & " försändelser importerade och PUP är uppdaterad."
     If skipScan + skipOrigin + skipDest > 0 Then msg = msg & vbLf & vbLf & "Hoppade över " & skipScan + skipOrigin + skipDest & " rader: " & skipScan & " med PUP/PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE."
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
-    If noSvc > 0 Then msg = msg & vbLf & vbLf & noSvc & " rader har ingen Base Service (värdet finns inte i Service-tabellen)."
-    MsgBox msg, vbInformation
-    If MsgBox("Vill du köra Validate Scans och Send Scans nu?", vbYesNo + vbQuestion) = vbYes Then ValidateAndSend n
+    If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Base Service och fick 01."
+    ValidateAndSend n, msg
     Exit Sub
 
 Abort:
@@ -229,9 +232,9 @@ Fail:
     MsgBox msg, vbCritical
 End Sub
 
-' Kör PUP1:s egna Validate Scans och Send Scans (samma som knapparna). Inloggningen
+' Kör PUP1:s egna Validate Scans direkt och frågar sedan om Send Scans ska köras (samma som knapparna). Inloggningen
 ' (användarnamn, lösenord, Device ID) skriver du själv i PUP1:s ruta - den sparas inte här.
-Private Sub ValidateAndSend(n As Long)
+Private Sub ValidateAndSend(n As Long, info As String)
     Dim ws As Worksheet, fails As Long, q As String
     Set ws = wb.Worksheets(PUP_SHEET)
     wb.Activate
@@ -246,7 +249,7 @@ Private Sub ValidateAndSend(n As Long)
     Else
         q = "Valideringen är godkänd. Skicka " & n & " scans?"
     End If
-    q = q & vbLf & vbLf & "Du får logga in i nästa ruta."
+    q = info & vbLf & vbLf & q & vbLf & vbLf & "Du får logga in i nästa ruta."
     If MsgBox(q, vbYesNo + vbExclamation + IIf(fails > 0, vbDefaultButton2, 0)) = vbNo Then Exit Sub
 
     ws.Activate

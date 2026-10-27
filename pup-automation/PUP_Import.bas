@@ -1,0 +1,268 @@
+Attribute VB_Name = "PUP_Import"
+Option Explicit
+
+' Importerar en DRE-rapport i PUP1 och uppdaterar bladet PUP i ett steg:
+'   1. Valj DRE-filen (xlsx/xls/xlsm/csv)
+'   2. Fyll i Track Date / Track Time (forifyllda med nu)
+'   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
+'   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
+'   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905) och bladet PUP visas
+
+Private Const DATA_SHEET As String = "Data"
+Private Const PUP_SHEET As String = "PUP"
+
+Public Sub ImporteraDRE()
+    Dim fields As Variant
+    fields = Array("Tracking Number", "Form ID", "Dest City Name", "Dest Cntry", _
+                   "Dest Postal Cd", "Base Service", "Pkg Type")
+
+    Dim wsData As Worksheet, loData As ListObject, loParam As ListObject
+    Set wsData = ThisWorkbook.Worksheets(DATA_SHEET)
+    Set loData = FindTable(wsData, "Tracking Number")
+    Set loParam = FindTable(wsData, "LocID")
+    If loData Is Nothing Or loParam Is Nothing Then
+        MsgBox "Hittar inte tabellerna med 'Tracking Number' och 'LocID' på bladet '" & DATA_SHEET & "'.", vbCritical
+        Exit Sub
+    End If
+
+    ' --- Vilken fil, vilket datum och vilken tid ------------------------------
+    Dim path As Variant
+    On Error Resume Next
+    ChDrive Environ$("USERPROFILE")
+    ChDir Environ$("USERPROFILE") & "\Downloads"
+    On Error GoTo 0
+    path = Application.GetOpenFilename("DRE-rapport (*.xlsx;*.xls;*.xlsm;*.csv),*.xlsx;*.xls;*.xlsm;*.csv", , "Välj DRE-rapporten")
+    If VarType(path) = vbBoolean Then Exit Sub
+
+    Dim d As String, t As String
+    d = InputBox("Track Date (MMdd):", "PUP", Format$(Now, "MMdd"))
+    If Len(d) = 0 Then Exit Sub
+    t = InputBox("Track Time (HHmm):", "PUP", Format$(Now, "HHmm"))
+    If Len(t) = 0 Then Exit Sub
+    If Not (d Like "####") Or Not (t Like "####") Then
+        MsgBox "Datum och tid ska vara fyra siffror, t.ex. 0521 och 0905.", vbExclamation
+        Exit Sub
+    End If
+
+    Dim src As Workbook, wsSrc As Worksheet
+    Dim headerRow As Long, lastRow As Long, r As Long, i As Long, n As Long, rowsMax As Long
+    Dim srcCols() As Long, missing As String, out() As Variant, v As Variant
+    Dim vals() As Variant, cn As WorkbookConnection, msg As String
+    Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
+    Dim s As String, lim As Long, noSvc As Long
+
+    Application.ScreenUpdating = False
+    On Error GoTo Fail
+
+    ' --- Läs DRE-filen ------------------------------------------------------
+    Set src = Workbooks.Open(Filename:=CStr(path), ReadOnly:=True, UpdateLinks:=0)
+    Set wsSrc = src.Worksheets(1)
+
+    headerRow = FindHeaderRow(wsSrc)
+    If headerRow = 0 Then
+        msg = "Hittar ingen rubrikrad med 'Tracking Number' i DRE-filen."
+        GoTo Abort
+    End If
+
+    ReDim srcCols(0 To UBound(fields))
+    For i = 0 To UBound(fields)
+        srcCols(i) = FindColumn(wsSrc, headerRow, CStr(fields(i)))
+        If srcCols(i) = 0 Then missing = missing & vbLf & "  - " & fields(i)
+    Next i
+    If Len(missing) > 0 Then
+        msg = "Följande kolumner saknas i DRE-filen:" & missing
+        GoTo Abort
+    End If
+
+    lastRow = wsSrc.Cells(wsSrc.Rows.Count, srcCols(0)).End(xlUp).Row
+    rowsMax = lastRow - headerRow
+    If rowsMax < 1 Then rowsMax = 1
+    ReDim out(1 To rowsMax, 0 To UBound(fields))
+    For r = headerRow + 1 To lastRow
+        If Len(Trim$(CStr(wsSrc.Cells(r, srcCols(0)).Value2))) > 0 Then
+            n = n + 1
+            For i = 0 To UBound(fields)
+                v = wsSrc.Cells(r, srcCols(i)).Value2
+                If VarType(v) = vbString Then v = Trim$(v)   ' siffror lämnas som siffror, som vid kopiera-klistra
+                out(n, i) = v
+            Next i
+        End If
+    Next r
+    src.Close SaveChanges:=False
+    Set src = Nothing
+
+    If n = 0 Then
+        msg = "DRE-filen innehåller inga rader."
+        GoTo Abort
+    End If
+
+    ' --- Data-bladet: Table1 (A-G) och Table2 (datum/tid) ---------------------
+    If Not loData.DataBodyRange Is Nothing Then loData.DataBodyRange.ClearContents
+    loData.Resize loData.HeaderRowRange.Resize(n + 1)
+
+    For i = 0 To UBound(fields)
+        ReDim vals(1 To n, 1 To 1)
+        For r = 1 To n
+            vals(r, 1) = out(r, i)
+        Next r
+        loData.ListColumns(CStr(fields(i))).DataBodyRange.Value2 = vals
+    Next i
+
+    SetParam loParam, "Track Date", CLng(d)
+    SetParam loParam, "Track Time", CLng(t)
+
+    ' --- Uppdatera (PUP-bladet byggs av Power Query) ----------------------------
+    On Error Resume Next
+    For Each cn In ThisWorkbook.Connections
+        cn.OLEDBConnection.BackgroundQuery = False
+    Next cn
+    On Error GoTo Fail
+    ThisWorkbook.RefreshAll
+    Application.CalculateUntilAsyncQueriesDone
+
+    ' --- Efterarbete på PUP-bladet ----------------------------------------------
+    Set loPup = FindTable(ThisWorkbook.Worksheets(PUP_SHEET), "AWB Number")
+    If Not loPup Is Nothing Then
+        If Not loPup.DataBodyRange Is Nothing Then
+            lim = loPup.DataBodyRange.Rows.Count
+            If lim > n Then lim = n
+
+            ' Power Query gör Track Time till tal, så 0905 blir 905 - fyll ut till 4 tecken
+            Set rngT = ColumnRange(loPup, "Track Time", lim)
+            If Not rngT Is Nothing Then
+                For Each cl In rngT.Cells
+                    s = CStr(cl.Value2)
+                    If Len(s) > 0 And Len(s) < 4 Then
+                        If s Like String(Len(s), "#") Then
+                            cl.NumberFormat = "@"
+                            cl.Value2 = Right$("0000" & s, 4)
+                        End If
+                    End If
+                Next cl
+            End If
+
+            Set rngS = ColumnRange(loPup, "Base Service", lim)
+            If Not rngS Is Nothing Then
+                For Each cl In rngS.Cells
+                    If Not IsError(cl.Value2) Then
+                        If Len(CStr(cl.Value2)) = 0 Then noSvc = noSvc + 1
+                    End If
+                Next cl
+            End If
+        End If
+    End If
+
+    Application.ScreenUpdating = True
+    On Error Resume Next
+    ThisWorkbook.Worksheets(PUP_SHEET).Activate
+    On Error GoTo 0
+
+    msg = n & " försändelser importerade och PUP är uppdaterad."
+    If noSvc > 0 Then msg = msg & vbLf & vbLf & noSvc & " rader har ingen Base Service (värdet finns inte i Service-tabellen)."
+    MsgBox msg, vbInformation
+    Exit Sub
+
+Abort:
+    On Error Resume Next
+    If Not src Is Nothing Then src.Close SaveChanges:=False
+    Application.ScreenUpdating = True
+    MsgBox msg, vbCritical
+    Exit Sub
+
+Fail:
+    msg = "Något gick fel: " & Err.Description
+    On Error Resume Next
+    If Not src Is Nothing Then src.Close SaveChanges:=False
+    Application.ScreenUpdating = True
+    MsgBox msg, vbCritical
+End Sub
+
+' Tabellen på bladet vars första kolumn börjar med headerStart (versaler, mellanslag och radbrytningar ignoreras).
+Private Function FindTable(ws As Worksheet, headerStart As String) As ListObject
+    Dim lo As ListObject
+    For Each lo In ws.ListObjects
+        If Norm(lo.ListColumns(1).Name) Like Norm(headerStart) & "*" Then
+            Set FindTable = lo
+            Exit Function
+        End If
+    Next lo
+End Function
+
+' Första dataraden i kolumnen vars rubrik börjar med headerStart.
+Private Sub SetParam(lo As ListObject, headerStart As String, v As Variant)
+    Dim c As ListColumn
+    For Each c In lo.ListColumns
+        If Norm(c.Name) Like Norm(headerStart) & "*" Then
+            With c.DataBodyRange.Cells(1, 1)
+                .NumberFormat = "0000"
+                .Value2 = v
+            End With
+            Exit Sub
+        End If
+    Next c
+End Sub
+
+' De första cnt raderna i kolumnen vars rubrik börjar med headerStart.
+Private Function ColumnRange(lo As ListObject, headerStart As String, cnt As Long) As Range
+    Dim c As ListColumn
+    For Each c In lo.ListColumns
+        If Norm(c.Name) Like Norm(headerStart) & "*" Then
+            Set ColumnRange = c.DataBodyRange.Resize(cnt)
+            Exit Function
+        End If
+    Next c
+End Function
+
+Private Function FindHeaderRow(ws As Worksheet) As Long
+    Dim r As Long, c As Long
+    For r = 1 To 30
+        For c = 1 To 60
+            If IsAlias("Tracking Number", CStr(ws.Cells(r, c).Value2)) Then
+                FindHeaderRow = r
+                Exit Function
+            End If
+        Next c
+    Next r
+End Function
+
+Private Function FindColumn(ws As Worksheet, headerRow As Long, field As String) As Long
+    Dim c As Long, lastCol As Long
+    lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column
+    For c = 1 To lastCol
+        If IsAlias(field, CStr(ws.Cells(headerRow, c).Value2)) Then
+            FindColumn = c
+            Exit Function
+        End If
+    Next c
+End Function
+
+' Godtar fältnamnet och vanliga varianter.
+Private Function IsAlias(field As String, header As String) As Boolean
+    Dim h As String, a As Variant, x As Variant
+    h = Norm(header)
+    If Len(h) = 0 Then Exit Function
+    Select Case field
+        Case "Tracking Number": a = Array("trackingnumber", "trackingnbr", "trackingno", "trknbr", "tracknbr", "trackingid", "awbnumber")
+        Case "Form ID":         a = Array("formid", "formcode", "formcd")
+        Case "Dest City Name":  a = Array("destcityname", "destcity", "destinationcity", "destinationcityname")
+        Case "Dest Cntry":      a = Array("destcntry", "destcountry", "destcntrycd", "destcountrycode", "destinationcountry")
+        Case "Dest Postal Cd":  a = Array("destpostalcd", "destpostalcode", "destinationpostalcode", "destzip", "destpostal")
+        Case "Base Service":    a = Array("baseservice", "baseservicecd", "service")
+        Case "Pkg Type":        a = Array("pkgtype", "packagetype", "pkgtypecd")
+        Case Else:              a = Array(Norm(field))
+    End Select
+    For Each x In a
+        If h = x Then
+            IsAlias = True
+            Exit Function
+        End If
+    Next x
+End Function
+
+Private Function Norm(s As String) As String
+    Dim i As Long, ch As String
+    For i = 1 To Len(s)
+        ch = LCase$(Mid$(s, i, 1))
+        If ch Like "[a-z0-9]" Then Norm = Norm & ch
+    Next i
+End Function

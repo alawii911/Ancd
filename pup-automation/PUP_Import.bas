@@ -4,7 +4,7 @@ Option Explicit
 ' Importerar en DRE-rapport i PUP1 och uppdaterar bladet PUP i ett steg:
 '   1. Valj DRE-filen (xlsx/xls/xlsm/csv)
 '   2. Track Date / Track Time sätts automatiskt till nu
-'      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med, rader med PUP/PUX hoppas över
+'      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med, rader där kolumnen PUP PUX inte är tom hoppas över
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
 '   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
 '   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905), kolumn T (Dropbox Number) lämnas tomt och bladet PUP visas
@@ -73,7 +73,7 @@ Public Sub ImporteraDRE()
     Dim vals() As Variant, cn As WorkbookConnection, msg As String
     Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
     Dim s As String, lim As Long, noSvc As Long
-    Dim colOrigin As Long, skipOrigin As Long, skipDest As Long, skipScan As Long, hdrLastCol As Long
+    Dim colOrigin As Long, skipOrigin As Long, skipDest As Long, skipScan As Long, hdrLastCol As Long, colPup As Long, hasPup As Boolean
 
     Application.ScreenUpdating = False
     On Error GoTo Fail
@@ -105,13 +105,22 @@ Public Sub ImporteraDRE()
     End If
 
     hdrLastCol = wsSrc.Cells(headerRow, wsSrc.Columns.Count).End(xlToLeft).Column
+    ' Kolumnen 'PUP PUX' i DRE: har raden något där finns den redan en upphämtningsscan
+    colPup = FindPrefixColumn(wsSrc, headerRow, hdrLastCol, "puppux")
+    If colPup = 0 Then colPup = FindPrefixColumn(wsSrc, headerRow, hdrLastCol, "pup")
+
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, srcCols(0)).End(xlUp).Row
     rowsMax = lastRow - headerRow
     If rowsMax < 1 Then rowsMax = 1
     ReDim out(1 To rowsMax, 0 To UBound(fields))
     For r = headerRow + 1 To lastRow
         If Len(Trim$(CStr(wsSrc.Cells(r, srcCols(0)).Value2))) > 0 Then
-            If HasPickupScan(wsSrc, r, hdrLastCol) Then
+            If colPup > 0 Then
+                hasPup = CellHasValue(wsSrc, r, colPup)
+            Else
+                hasPup = HasPickupScan(wsSrc, r, hdrLastCol)   ' reserv: någon cell är exakt PUP/PUX
+            End If
+            If hasPup Then
                 skipScan = skipScan + 1                   ' raden har redan PUP/PUX
             ElseIf UCase$(Trim$(CStr(wsSrc.Cells(r, colOrigin).Value2))) <> "SE" Then
                 skipOrigin = skipOrigin + 1               ' ursprungsland är inte SE
@@ -211,6 +220,7 @@ Public Sub ImporteraDRE()
     On Error GoTo 0
 
     msg = n & " försändelser importerade och PUP är uppdaterad."
+    If colPup = 0 Then msg = msg & vbLf & vbLf & "Hittade ingen PUP PUX-kolumn i DRE-filen - letade efter cellen PUP/PUX i stället."
     If skipScan + skipOrigin + skipDest > 0 Then msg = msg & vbLf & vbLf & "Hoppade över " & skipScan + skipOrigin + skipDest & " rader: " & skipScan & " med PUP/PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE."
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Base Service och fick 01."
@@ -284,6 +294,30 @@ Private Sub SetParam(lo As ListObject, headerStart As String, v As Variant)
         End If
     Next c
 End Sub
+
+' Första kolumnen i rubrikraden vars rubrik (utan mellanslag/tecken, små bokstäver) börjar med prefix.
+Private Function FindPrefixColumn(ws As Worksheet, headerRow As Long, lastCol As Long, prefix As String) As Long
+    Dim c As Long
+    For c = 1 To lastCol
+        If Not IsError(ws.Cells(headerRow, c).Value2) Then
+            If Norm(CStr(ws.Cells(headerRow, c).Value2)) Like prefix & "*" Then
+                FindPrefixColumn = c
+                Exit Function
+            End If
+        End If
+    Next c
+End Function
+
+' Sant om cellen innehåller något.
+Private Function CellHasValue(ws As Worksheet, r As Long, c As Long) As Boolean
+    Dim v As Variant
+    v = ws.Cells(r, c).Value2
+    If IsError(v) Then
+        CellHasValue = True
+    Else
+        CellHasValue = (Len(Trim$(CStr(v))) > 0)
+    End If
+End Function
 
 ' Sant om någon cell i raden är exakt PUP eller PUX (redan skannad som upphämtad).
 Private Function HasPickupScan(ws As Worksheet, r As Long, lastCol As Long) As Boolean

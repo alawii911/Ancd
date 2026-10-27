@@ -166,12 +166,15 @@ async function handleFile(file) {
     const oIdx = header.findIndex(h => ORIGIN_ALIASES.includes(h));
     if (oIdx < 0) return status("Kolumnen 'Origin Cntry' saknas i filen. Lägg till den bland rapportens fält i DRE.", "err");
 
+    let pIdx = header.findIndex(h => h.startsWith("puppux"));
+    if (pIdx < 0) pIdx = header.findIndex(h => h.startsWith("pup"));
     let skipOrigin = 0, skipDest = 0, skipScan = 0;
     rows = [];
     for (const r of grid.slice(hIdx + 1)) {
       const row = cols.map(c => cell(r[c]));
       if (row[0] === "") continue;
-      if (r.some(c => ["PUP", "PUX"].includes(cell(c).toUpperCase()))) { skipScan++; continue; }
+      const hasScan = pIdx >= 0 ? cell(r[pIdx]) !== "" : r.some(c => ["PUP", "PUX"].includes(cell(c).toUpperCase()));
+      if (hasScan) { skipScan++; continue; }
       if (cell(r[oIdx]).toUpperCase() !== "SE") { skipOrigin++; continue; }
       if (row[3].toUpperCase() === "SE") { skipDest++; continue; }
       rows.push(row);
@@ -180,6 +183,7 @@ async function handleFile(file) {
     render();
     let msg = `${file.name}: ${rows.length} försändelser inlästa.`;
     if (skipScan + skipOrigin + skipDest) msg += ` Hoppade över ${skipScan + skipOrigin + skipDest}: ${skipScan} med PUP/PUX, ${skipOrigin} med annat ursprungsland än SE, ${skipDest} med Dest Cntry SE.`;
+    if (pIdx < 0) msg += " Hittade ingen PUP PUX-kolumn - letade efter cellen PUP/PUX i stället.";
     if (unmapped) status(`${msg} OBS: ${unmapped} rader har en Base Service som inte finns i Service-tabellen (markerade, Base Service lämnas tom).`, "warn");
     else status(msg, rows.length ? "ok" : "warn");
   } catch (e) {

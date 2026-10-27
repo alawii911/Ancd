@@ -7,7 +7,7 @@ Option Explicit
 '      Bara rader med Origin Cntry = SE och Dest Cntry inte SE tas med
 '   3. Tabellen Table1 pa bladet Data tomms och fylls (A-G), tabellen Table2 (J-O) far datum och tid
 '   4. Refresh All - PUP-bladet raknas om av de befintliga Power Query-fragorna
-'   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905), Dropbox Number sätts i kolumn T och bladet PUP visas
+'   5. Track Time fylls ut till 4 tecken (0905 i stallet for 905), kolumn T (Dropbox Number) lämnas tomt och bladet PUP visas
 
 Private Const DATA_SHEET As String = "Data"
 Private Const PUP_SHEET As String = "PUP"
@@ -64,18 +64,8 @@ Public Sub ImporteraDRE()
         If MsgBox("Track Date " & d & " ligger mer än 7 dagar från idag. Valideringen i PUP1 ger FAIL på det." & vbLf & vbLf & "Fortsätta ändå?", vbYesNo + vbExclamation) = vbNo Then Exit Sub
     End If
 
-    stopVal = UCase$(ParamText(loParam, "Stop Type"))
-    If stopVal = "R" Or stopVal = "D" Then
-        db = Trim$(CStr(wb.Worksheets(PUP_SHEET).Range("T3").Value2))
-        If Not (db Like "#*") Then db = ""
-        db = InputBox("Dropbox Number (valfritt, 1-7 siffror). Lämna tomt för att hoppa över:", "PUP", db)
-        If Len(db) = 0 Then
-            ' hoppas över - Validate Scans ger FAIL, men Send Scans kontrollerar inte det
-        ElseIf Len(db) > 7 Or Not (db Like String(Len(db), "#")) Then
-            MsgBox "Dropbox Number ska vara 1-7 siffror.", vbExclamation
-            Exit Sub
-        End If
-    End If
+    ' Dropbox Number lämnas tomt (kolumn T)
+    db = ""
 
     Dim src As Workbook, wsSrc As Worksheet
     Dim headerRow As Long, lastRow As Long, r As Long, i As Long, n As Long, rowsMax As Long

@@ -27,7 +27,7 @@ Makrot:
   det skickar (extra varning vid FAIL) och du loggar in själv i PUP1:s ruta. Inloggningen sparas inte.
 
 - varnar om Track Date ligger 7 dagar eller mer från idag (valideringen ger FAIL på det)
-- frågar efter Dropbox Number när Stop Type är R eller D och skriver det i kolumn T på PUP
+- lämnar Dropbox Number (kolumn T på PUP) tomt och rensar gamla värden där
 
 ## Varför rader blir FAIL i Validate Scans
 

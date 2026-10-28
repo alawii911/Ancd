@@ -199,9 +199,9 @@ Public Sub ImporteraDRE2()
             Set rngT = ColumnRange(loPup, "Track Time", lim)
             If Not rngT Is Nothing Then PadTimes rngT
 
-            ' Tomma Base Service (gula rutor) fylls med 04
-            Set rngS = ColumnRange(loPup, "Base Service", lim)
-            If Not rngS Is Nothing Then noSvc = FillBaseService(rngS)
+            ' Tomma Package type (gula rutor) fylls med 04
+            Set rngS = ColumnRange(loPup, "Package type", lim)
+            If Not rngS Is Nothing Then noSvc = FillBlank(rngS, "04")
         End If
     End If
 
@@ -226,7 +226,7 @@ Public Sub ImporteraDRE2()
           "Hoppade över: " & skipScan & " med PUP PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE." & vbLf & _
           "(Makro ImporteraDRE2 - Origin Cntry i kolumn " & colOrigin & ", PUP PUX " & IIf(colPup > 0, "i kolumn " & colPup, "saknas") & ")"
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
-    If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Base Service och fick 04."
+    If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Package type och fick 04."
     ValidateAndSend n, msg
     Exit Sub
 
@@ -365,14 +365,14 @@ Private Sub PadTimes(rng As Range)
     End If
 End Sub
 
-' Skriver 04 i tomma Base Service, hela kolumnen i ett steg. Returnerar hur många som fylldes.
-Private Function FillBaseService(rng As Range) As Long
+' Skriver värdet i tomma celler, hela kolumnen i ett steg. Returnerar hur många som fylldes.
+Private Function FillBlank(rng As Range, fillValue As String) As Long
     Dim a As Variant, r As Long, cnt As Long
     a = Cells2D(rng)
     For r = 1 To UBound(a, 1)
         If Not IsError(a(r, 1)) Then
             If Len(CStr(a(r, 1))) = 0 Then
-                a(r, 1) = "04"
+                a(r, 1) = fillValue
                 cnt = cnt + 1
             End If
         End If
@@ -381,7 +381,7 @@ Private Function FillBaseService(rng As Range) As Long
         rng.NumberFormat = "@"
         rng.Value2 = a
     End If
-    FillBaseService = cnt
+    FillBlank = cnt
 End Function
 
 ' Den PUP1-arbetsbok som är öppen (bladen Data och PUP samt tabellen med Tracking Number).

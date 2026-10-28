@@ -24,7 +24,7 @@ Makrot:
 - sätter Track Date och Track Time i Table2 (J–O); övriga fält där lämnas som de är
 - kör Refresh All så att PUP-bladet byggs av de befintliga frågorna
 - fyller ut Track Time till fyra tecken (frågan gör annars 0905 till 905)
-- fyller tomma Package type (gula rutor) med 04
+- fyller tomma Base Service och Package type (gula rutor) med 04
 - kör Validate Scans automatiskt och frågar sedan om Send Scans ska köras. Den kör PUP1:s egna knappar, frågar innan
   det skickar (extra varning vid FAIL) och du loggar in själv i PUP1:s ruta. Inloggningen sparas inte.
 

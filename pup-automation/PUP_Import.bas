@@ -80,7 +80,7 @@ Public Sub ImporteraDRE2()
     Dim srcCols() As Long, missing As String, out() As Variant, v As Variant
     Dim vals() As Variant, cn As WorkbookConnection, msg As String
     Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
-    Dim s As String, lim As Long, noSvc As Long, data As Variant, rowsMax As Long
+    Dim s As String, lim As Long, noSvc As Long, noPkg As Long, data As Variant, rowsMax As Long
     Dim colOrigin As Long, skipOrigin As Long, skipDest As Long, skipScan As Long, hdrLastCol As Long, colPup As Long, hasPup As Boolean
 
     Application.ScreenUpdating = False
@@ -199,9 +199,11 @@ Public Sub ImporteraDRE2()
             Set rngT = ColumnRange(loPup, "Track Time", lim)
             If Not rngT Is Nothing Then PadTimes rngT
 
-            ' Tomma Package type (gula rutor) fylls med 04
-            Set rngS = ColumnRange(loPup, "Package type", lim)
+            ' Tomma Base Service och Package type (gula rutor) fylls med 04
+            Set rngS = ColumnRange(loPup, "Base Service", lim)
             If Not rngS Is Nothing Then noSvc = FillBlank(rngS, "04")
+            Set rngT = ColumnRange(loPup, "Package type", lim)
+            If Not rngT Is Nothing Then noPkg = FillBlank(rngT, "04")
         End If
     End If
 
@@ -226,7 +228,8 @@ Public Sub ImporteraDRE2()
           "Hoppade över: " & skipScan & " med PUP PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE." & vbLf & _
           "(Makro ImporteraDRE2 - Origin Cntry i kolumn " & colOrigin & ", PUP PUX " & IIf(colPup > 0, "i kolumn " & colPup, "saknas") & ")"
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
-    If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Package type och fick 04."
+    If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Base Service och fick 04."
+    If noPkg > 0 Then msg = msg & vbLf & noPkg & " rader saknade Package type och fick 04."
     ValidateAndSend n, msg
     Exit Sub
 

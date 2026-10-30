@@ -82,6 +82,7 @@ Public Sub ImporteraDRE2()
     Dim loPup As ListObject, rngT As Range, rngS As Range, cl As Range
     Dim s As String, lim As Long, noSvc As Long, noPkg As Long, data As Variant, rowsMax As Long
     Dim colOrigin As Long, skipOrigin As Long, skipDest As Long, skipScan As Long, hdrLastCol As Long, colPup As Long, hasPup As Boolean
+    Dim colShip As Long, isPrima As Boolean, primaExtra As Long
 
     Application.ScreenUpdating = False
     On Error GoTo Fail
@@ -123,6 +124,9 @@ Public Sub ImporteraDRE2()
     colPup = FindPrefixColumn(wsSrc, headerRow, hdrLastCol, "puppux")
     If colPup = 0 Then colPup = FindPrefixColumn(wsSrc, headerRow, hdrLastCol, "pup")
 
+    ' Kolumnen 'Shipper' (valfri): Prima Printer Nordic ska med även om Dest Cntry är SE
+    colShip = FindColumn(wsSrc, headerRow, "Shipper")
+
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, srcCols(0)).End(xlUp).Row
     If lastRow <= headerRow Then
         msg = "DRE-filen innehåller inga rader."
@@ -140,14 +144,17 @@ Public Sub ImporteraDRE2()
             Else
                 hasPup = RowHasPupText(data, r, hdrLastCol)   ' reserv: någon cell är exakt PUP/PUX
             End If
+            isPrima = False
+            If colShip > 0 Then isPrima = (InStr(UCase$(TextOf(data(r, colShip))), "PRIMA PRINTER NORDIC") > 0)
             If hasPup Then
                 skipScan = skipScan + 1                   ' raden har redan PUP/PUX
             ElseIf UCase$(TextOf(data(r, colOrigin))) <> "SE" Then
                 skipOrigin = skipOrigin + 1               ' ursprungsland är inte SE
-            ElseIf UCase$(TextOf(data(r, srcCols(3)))) = "SE" Then
+            ElseIf UCase$(TextOf(data(r, srcCols(3)))) = "SE" And Not isPrima Then
                 skipDest = skipDest + 1                   ' destinationsland är SE
             Else
                 n = n + 1
+                If UCase$(TextOf(data(r, srcCols(3)))) = "SE" Then primaExtra = primaExtra + 1
                 For i = 0 To UBound(fields)
                     v = data(r, srcCols(i))
                     If VarType(v) = vbString Then v = Trim$(v)   ' siffror lämnas som siffror, som vid kopiera-klistra
@@ -227,6 +234,7 @@ Public Sub ImporteraDRE2()
     msg = msg & vbLf & vbLf & "DRE-filen hade " & n + skipScan + skipOrigin + skipDest & " rader, " & n & " togs med." & vbLf & _
           "Hoppade över: " & skipScan & " med PUP PUX, " & skipOrigin & " med annat ursprungsland än SE, " & skipDest & " med Dest Cntry SE." & vbLf & _
           "(Makro ImporteraDRE2 - Origin Cntry i kolumn " & colOrigin & ", PUP PUX " & IIf(colPup > 0, "i kolumn " & colPup, "saknas") & ")"
+    If primaExtra > 0 Then msg = msg & vbLf & primaExtra & " rader från Prima Printer Nordic togs med trots Dest Cntry SE."
     If n > 998 Then msg = msg & vbLf & vbLf & "OBS: PUP1:s egna knappar rensar och validerar bara rad 3-1000 (998 rader)."
     If noSvc > 0 Then msg = msg & vbLf & noSvc & " rader saknade Base Service och fick 04."
     If noPkg > 0 Then msg = msg & vbLf & noPkg & " rader saknade Package type och fick 04."

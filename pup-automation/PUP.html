@@ -168,7 +168,8 @@ async function handleFile(file) {
 
     let pIdx = header.findIndex(h => h.startsWith("puppux"));
     if (pIdx < 0) pIdx = header.findIndex(h => h.startsWith("pup"));
-    let skipOrigin = 0, skipDest = 0, skipScan = 0;
+    const sIdx = header.findIndex(h => h === "shipper");
+    let skipOrigin = 0, skipDest = 0, skipScan = 0, primaExtra = 0;
     rows = [];
     for (const r of grid.slice(hIdx + 1)) {
       const row = cols.map(c => cell(r[c]));
@@ -176,13 +177,15 @@ async function handleFile(file) {
       const hasScan = pIdx >= 0 ? cell(r[pIdx]) !== "" : r.some(c => ["PUP", "PUX"].includes(cell(c).toUpperCase()));
       if (hasScan) { skipScan++; continue; }
       if (cell(r[oIdx]).toUpperCase() !== "SE") { skipOrigin++; continue; }
-      if (row[3].toUpperCase() === "SE") { skipDest++; continue; }
+      const prima = sIdx >= 0 && cell(r[sIdx]).toUpperCase().includes("PRIMA PRINTER NORDIC");
+      if (row[3].toUpperCase() === "SE") { if (!prima) { skipDest++; continue; } primaExtra++; }
       rows.push(row);
     }
     setNow();
     render();
     let msg = `${file.name}: ${rows.length} försändelser inlästa.`;
     if (skipScan + skipOrigin + skipDest) msg += ` Hoppade över ${skipScan + skipOrigin + skipDest}: ${skipScan} med PUP/PUX, ${skipOrigin} med annat ursprungsland än SE, ${skipDest} med Dest Cntry SE.`;
+    if (primaExtra) msg += ` ${primaExtra} rader från Prima Printer Nordic togs med trots Dest Cntry SE.`;
     if (pIdx < 0) msg += " Hittade ingen PUP PUX-kolumn - letade efter cellen PUP/PUX i stället.";
     if (unmapped) status(`${msg} OBS: ${unmapped} rader har en Base Service som inte finns i Service-tabellen (markerade, Base Service lämnas tom).`, "warn");
     else status(msg, rows.length ? "ok" : "warn");

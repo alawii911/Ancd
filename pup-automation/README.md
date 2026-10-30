@@ -19,6 +19,8 @@ Varje gång:
 Båda tar bara med rader där Origin Cntry = SE och Dest Cntry inte är SE, och hoppar över rader där kolumnen **PUP PUX** i DRE inte är tom (de har redan en upphämtningsscan). Origin Cntry måste finnas
 bland fälten i DRE-rapporten, annars stannar de med ett meddelande.
 
+Undantag: rader från avsändaren PRIMA PRINTER NORDIC AB (kolumnen Shipper) tas med även om Dest Cntry är SE.
+
 Makrot:
 - tömmer och fyller Table1 (A–G) med exakt så många rader som behövs
 - sätter Track Date och Track Time i Table2 (J–O); övriga fält där lämnas som de är
